@@ -56,7 +56,7 @@ public:
             bpHp = bpfHpCoef * bpHp + (1.0f - bpfHpCoef) * bpLp;
             const float bpNoise = bpLp - bpHp;
 
-            const float modSamples = bpNoise * amount * 0.6f; // tiny FM
+            const float modSamples = bpNoise * amount * 0.25f; // tiny FM, capped to stay subtle
             const float readPos = (float) writeIdx - baseDelay + modSamples;
 
             for (int c = 0; c < numCh; ++c)

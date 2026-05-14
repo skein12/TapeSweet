@@ -27,7 +27,10 @@ public:
     void prepare (double sampleRate, int numChannels)
     {
         sr = sampleRate;
-        maxGrain = (int) (sampleRate * 0.20);   // 200 ms ceiling
+        // Grain range: 40-100 ms. Anything > ~120 ms makes the two-tap structure
+        // audible as a slap-back echo of every transient (research-confirmed:
+        // inter-tap spacing = grain/2, becomes perceptible above ~75 ms).
+        maxGrain = (int) (sampleRate * 0.10);   // 100 ms ceiling
         minGrain = (int) (sampleRate * 0.04);   //  40 ms floor
         currentGrain = (float) ((minGrain + maxGrain) / 2);
         bufSize = maxGrain * 3;
@@ -61,13 +64,14 @@ public:
         const int numCh = juce::jmin ((int) buffers.size(), buffer.getNumChannels());
 
         const float targetGrain     = juce::jmap (natural, (float) minGrain, (float) maxGrain);
-        const float jitterMaxSamples = natural * (float) sr * 0.008f; // up to ±8 ms
+        const float jitterMaxSamples = natural * (float) sr * 0.004f; // up to ±4 ms
 
         const float grainSmooth = 0.0002f; // simple LP on grain length to avoid pops
 
         for (int s = 0; s < numSamples; ++s)
         {
             currentGrain += (targetGrain - currentGrain) * grainSmooth;
+            currentGrain = juce::jlimit ((float) minGrain, (float) maxGrain, currentGrain);
 
             for (int c = 0; c < numCh; ++c)
                 buffers[(size_t) c][(size_t) writeIdx] = buffer.getSample (c, s);
@@ -75,8 +79,8 @@ public:
             const float ratio = ratioBase * std::pow (2.0f, modCents * (1.0f / 1200.0f));
             const float deltaPhase = (ratio - 1.0f) / currentGrain;
 
-            // Anti-phase tap distance modulation: ±0.5 % of grain length
-            const float antiphaseOff = std::sin (juce::MathConstants<float>::twoPi * antiphase) * 0.005f;
+            // Anti-phase tap distance modulation: ±0.2 % of grain length
+            const float antiphaseOff = std::sin (juce::MathConstants<float>::twoPi * antiphase) * 0.002f;
 
             float ph1 = phase;
             float ph2 = phase + 0.5f + antiphaseOff;
@@ -108,13 +112,15 @@ public:
                 // Re-jitter grain length on each wrap so the grain-rate modulation
                 // becomes aperiodic noise rather than a tone
                 if (jitterMaxSamples > 1.0f)
-                    currentGrain = targetGrain + (random.nextFloat() - 0.5f) * 2.0f * jitterMaxSamples;
+                    currentGrain = juce::jlimit ((float) minGrain, (float) maxGrain,
+                                                 targetGrain + (random.nextFloat() - 0.5f) * 2.0f * jitterMaxSamples);
             }
             while (phase < 0.0f)
             {
                 phase += 1.0f;
                 if (jitterMaxSamples > 1.0f)
-                    currentGrain = targetGrain + (random.nextFloat() - 0.5f) * 2.0f * jitterMaxSamples;
+                    currentGrain = juce::jlimit ((float) minGrain, (float) maxGrain,
+                                                 targetGrain + (random.nextFloat() - 0.5f) * 2.0f * jitterMaxSamples);
             }
 
             antiphase += antiphaseRate;

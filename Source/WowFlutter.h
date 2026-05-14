@@ -54,12 +54,12 @@ public:
         const float whiteForDrift = random.nextFloat() * 2.0f - 1.0f;
         wowDrift = wowDriftCoef * wowDrift + (1.0f - wowDriftCoef) * whiteForDrift;
 
-        const float wow = (capstan * 0.6f + wowDrift * 1.4f) * 8.0f * wowAmount;
+        const float wow = (capstan * 0.6f + wowDrift * 1.4f) * 5.0f * wowAmount;
 
         // Flutter: filtered noise (one-pole resonator-ish via simple LPF on noise)
         const float whiteForFlutter = random.nextFloat() * 2.0f - 1.0f;
         flutter = flutterCoef * flutter + (1.0f - flutterCoef) * whiteForFlutter;
-        const float flut = flutter * 4.0f * 2.0f * flutterAmount; // up to ±4 cents
+        const float flut = flutter * 2.0f * 2.0f * flutterAmount; // up to ±2 cents
 
         return wow + flut;
     }
