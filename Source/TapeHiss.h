@@ -69,14 +69,13 @@ private:
     inline float nextPink() noexcept
     {
         // Voss-McCartney with 5 rows
-        const auto bit = juce::BigInteger();
         pinkCounter++;
         const int trailingZeros = countTrailingZeros (pinkCounter);
         const int row = juce::jmin (trailingZeros, 4);
         pinkRows[row] = random.nextFloat() * 2.0f - 1.0f;
         float sum = 0.0f;
         for (auto v : pinkRows) sum += v;
-        return sum * 0.4f; // normalised to ~±1
+        return sum * 0.4f;
     }
 
     static int countTrailingZeros (uint32_t v) noexcept

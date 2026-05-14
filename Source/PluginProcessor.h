@@ -48,10 +48,11 @@ private:
 
     using Filter      = juce::dsp::IIR::Filter<float>;
     using FilterCoefs = juce::dsp::IIR::Coefficients<float>;
+    using DelayLine   = juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None>;
 
     NABEmphasis preEmph, deEmph;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> headBump;
-    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> fixedAir;     // gentle fixed HF rolloff (replaces Tone)
+    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> fixedAir;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hpf30;
     juce::dsp::Oversampling<float> oversampler
         { 2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
@@ -63,8 +64,18 @@ private:
     TapeHiss          tapeHiss;
     TransientDetector transientDetector;
 
+    DelayLine dryDelay        { 16384 };
+    DelayLine bypassDelay     { 16384 };
+
     juce::AudioBuffer<float> modBuffer;
-    juce::AudioBuffer<float> transientBuffer;   // per-sample 0/1 (sample-accurate, channel 0)
+    juce::AudioBuffer<float> transientBuffer;
+    juce::AudioBuffer<float> delayedDryBuffer;
+
+    // Cached coefficient inputs — only rebuild filters when these change
+    float lastHeadBumpHz = -1.0f;
+    float lastHeadBumpDb = -1000.0f;
+
+    int   totalLatencySamples = 0;
 
     double currentSampleRate = 44100.0;
 

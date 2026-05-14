@@ -4,7 +4,7 @@ An AU/VST3 plugin that emulates pushing 80s analog multitrack tape a few percent
 hotter and a few percent faster the trick behind records like *Into the Groove*
 and other 80s hits where the multitrack was played back slightly fast for sheen.
 
-Built with JUCE 8. Black/minimalist UI, designed to be readable at a glance.
+Built with JUCE 8.
 
 ## Signal chain
 
@@ -82,17 +82,21 @@ Then rescan in your DAW.
 
 ## Status
 
-v0.6.0 — major refactor.
+v0.7.0 — correctness pass after audition feedback.
 
-- Reduced from 9 knobs (v0.4) to 6 (v0.6). Each knob now drives multiple
-  coordinated DSP stages.
-- Transient-aware varispeed: detects transients in the input and ducks the
-  read tap that would otherwise duplicate them, eliminating the percussion
-  echo that's the signature artefact of 2-tap pitch shifters.
-- Multi-band HF Sparkle exciter (presence + air bands) — much more audible
-  shimmer when Natural is in the upper half of its range.
-- Tape saturator with program-dependent compression, asymmetric soft-knee,
-  and memory feedback — closer to real tape "glue" than a generic waveshaper.
-- Tone parameter removed (the speed-coupled HF behaviour is now a fixed
-  internal 18 kHz rolloff; user-controlled gap-loss frequency was opaque).
-- ScrapeFlutter module removed — minor contribution, simpler code.
+- **Mix is now a true wet/dry knob.** Mix = 0 % outputs the latency-matched
+  dry input (effective bypass); Mix = 100 % outputs the fully processed
+  signal. Internally a DelayLine holds the dry signal delayed by exactly
+  `oversampler_latency + varispeed_latency` so wet and dry are sample-
+  aligned at the blend point.
+- **Speed = 0 % is now transparent.** Previously the varispeed always ran,
+  introducing 2-tap comb filtering even at unity pitch ratio. When Speed
+  and Warm are both at zero the varispeed is bypassed in favour of a
+  constant-latency delay so PDC reporting stays consistent.
+- **Latency** now reported correctly as `oversampler + varispeed`
+  (≈40 ms + a few samples at 44.1 kHz).
+- **No more per-block allocations.** Dry buffer, mod buffer, transient
+  buffer, and delayed-dry buffer are all pre-allocated in `prepareToPlay`.
+  Head-bump coefficients are cached and only rebuilt when the parameters
+  meaningfully change. Stray `juce::BigInteger()` line in the pink-noise
+  generator removed.

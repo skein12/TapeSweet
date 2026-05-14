@@ -38,7 +38,7 @@ void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     oversampler.initProcessing ((size_t) samplesPerBlock);
     oversampler.reset();
-    saturator.prepare (sampleRate * 4.0, 2);   // saturator runs at oversampled rate
+    saturator.prepare (sampleRate * 4.0, 2);
 
     varispeed.prepare         (sampleRate, 2);
     wowFlutter.prepare        (sampleRate);
@@ -46,17 +46,34 @@ void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     tapeHiss.prepare          (sampleRate);
     transientDetector.prepare (sampleRate, 2);
 
-    modBuffer.setSize       (1, samplesPerBlock, false, false, true);
-    transientBuffer.setSize (1, samplesPerBlock, false, false, true);
+    // ---- Latency wiring ----
+    const int osLatency       = (int) std::ceil (oversampler.getLatencyInSamples());
+    const int varispeedLat    = varispeed.getLatencySamples();
+    totalLatencySamples       = osLatency + varispeedLat;
 
+    dryDelay.prepare    (spec);
+    dryDelay.setMaximumDelayInSamples (totalLatencySamples + 8);
+    dryDelay.setDelay   ((float) totalLatencySamples);
+
+    bypassDelay.prepare (spec);
+    bypassDelay.setMaximumDelayInSamples (varispeedLat + 8);
+    bypassDelay.setDelay ((float) varispeedLat);
+
+    setLatencySamples (totalLatencySamples);
+
+    // ---- Pre-allocated scratch buffers ----
+    modBuffer.setSize        (1, samplesPerBlock, false, false, true);
+    transientBuffer.setSize  (1, samplesPerBlock, false, false, true);
+    delayedDryBuffer.setSize (2, samplesPerBlock, false, false, true);
+
+    // ---- Fixed filters ----
     *hpf30.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass (
         sampleRate, 30.0f, 0.707f);
-
-    // Fixed gentle HF rolloff at 18 kHz — replaces user-controlled Tone
     *fixedAir.state = *juce::dsp::IIR::Coefficients<float>::makeFirstOrderLowPass (
         sampleRate, juce::jmin (18000.0f, (float) sampleRate * 0.45f));
 
-    setLatencySamples (varispeed.getLatencySamples());
+    // Force first-block coefficient rebuild
+    lastHeadBumpHz = lastHeadBumpDb = -1.0f;
 }
 
 void TapeSweetProcessor::releaseResources() {}
@@ -75,9 +92,7 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const int numCh      = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    // ============================================================================
-    // Parameter reads
-    // ============================================================================
+    // ---- Parameters ----
     const float speedPct = apvts.getRawParameterValue ("speed")  ->load();
     const float natural  = apvts.getRawParameterValue ("natural")->load() * 0.01f;
     const float drive    = apvts.getRawParameterValue ("drive")  ->load();
@@ -85,38 +100,54 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const float mixPct   = apvts.getRawParameterValue ("mix")    ->load();
     const float outDb    = apvts.getRawParameterValue ("output") ->load();
 
-    // ============================================================================
-    // Warm knob → head bump + wow/flutter + hiss, with designed curves
-    // ============================================================================
-    const float warmthDb   = warm * 3.5f;          // head bump 0–3.5 dB
-    const float wowAmt     = warm * 0.7f;          // wow 0–70%
+    // ---- Warm-driven amounts (designed curves) ----
+    const float warmthDb   = warm * 3.5f;
+    const float wowAmt     = warm * 0.7f;
     const float flutterAmt = warm * 0.6f;
-    const float hissAmt    = warm * warm * 0.35f;  // quadratic — clean at low Warm
+    const float hissAmt    = warm * warm * 0.35f;
 
-    // ============================================================================
-    // Natural knob → varispeed smoothness + Sparkle (quadratic, blooms upper-half)
-    // ============================================================================
+    // ---- Natural-driven sparkle (quadratic) ----
     const float sparkleAmt = natural * natural * 0.9f;
 
-    // ---- Derived ----
+    // ---- Derived gains ----
     const float mix        = mixPct * 0.01f;
     const float driveGain  = juce::Decibels::decibelsToGain (drive);
     const float outGain    = juce::Decibels::decibelsToGain (outDb);
     const float makeup     = juce::Decibels::decibelsToGain (-drive * 0.5f);
     const float speedRatio = 1.0f + speedPct * 0.01f;
 
-    // Speed-coupled head bump (replaces low shelf with a broad peak)
-    *headBump.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
-        currentSampleRate,
-        juce::jlimit (40.0f, 200.0f, 80.0f * speedRatio),
-        0.7f,
-        juce::Decibels::decibelsToGain (warmthDb));
+    // ============================================================================
+    // Cache head-bump coefficients — only rebuild if input parameters changed.
+    // Avoids per-block allocation in the makePeakFilter() path.
+    // ============================================================================
+    const float bumpHz = juce::jlimit (40.0f, 200.0f, 80.0f * speedRatio);
+    if (std::abs (bumpHz - lastHeadBumpHz) > 0.5f
+     || std::abs (warmthDb - lastHeadBumpDb) > 0.05f)
+    {
+        *headBump.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
+            currentSampleRate, bumpHz, 0.7f,
+            juce::Decibels::decibelsToGain (warmthDb));
+        lastHeadBumpHz = bumpHz;
+        lastHeadBumpDb = warmthDb;
+    }
 
     // ============================================================================
-    // Detect transients in the dry input — used to align varispeed wraps
+    // Push input into dry-delay so we have a latency-matched dry signal to mix
+    // against the wet output at the end of the chain. This is what makes Mix
+    // behave like a real wet/dry control instead of just a saturation blend.
     // ============================================================================
-    if (transientBuffer.getNumSamples() < numSamples)
-        transientBuffer.setSize (1, numSamples, false, false, true);
+    for (int s = 0; s < numSamples; ++s)
+    {
+        for (int c = 0; c < numCh; ++c)
+            dryDelay.pushSample (c, buffer.getSample (c, s));
+
+        for (int c = 0; c < numCh; ++c)
+            delayedDryBuffer.setSample (c, s, dryDelay.popSample (c));
+    }
+
+    // ============================================================================
+    // Transient flags for varispeed alignment
+    // ============================================================================
     auto* transientFlags = transientBuffer.getWritePointer (0);
     for (int s = 0; s < numSamples; ++s)
     {
@@ -127,14 +158,8 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // Capture dry copy for Mix
-    // ============================================================================
-    juce::AudioBuffer<float> dry;
-    dry.makeCopyOf (buffer);
-
-    // ============================================================================
     // WET PATH: NAB pre-emph → drive → tape sat (oversampled) → NAB de-emph
-    //           → speed-coupled head bump → fixed air rolloff
+    //           → speed-coupled head bump → fixed 18 kHz air rolloff
     // ============================================================================
     preEmph.process (buffer);
 
@@ -165,37 +190,40 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // Dry/Wet blend BEFORE varispeed (both share the same pitch shift)
+    // Varispeed — bypassed via constant-latency delay when no pitch shift
+    // and no wow/flutter is active. Keeps total plugin latency constant so
+    // PDC stays correct, while making Speed=0 + Warm=0 truly transparent
+    // (no two-tap comb filtering coloration).
     // ============================================================================
-    if (mix < 0.999f)
+    const bool varispeedActive = (std::abs (speedPct) > 0.005f) || (wowAmt > 0.001f);
+
+    if (varispeedActive)
     {
-        for (int ch = 0; ch < numCh; ++ch)
+        wowFlutter.setAmounts (wowAmt, flutterAmt);
+
+        auto* modData = modBuffer.getWritePointer (0);
+        for (int s = 0; s < numSamples; ++s)
+            modData[s] = wowFlutter.tick();
+
+        varispeed.setPitchRatio (speedRatio);
+        varispeed.setNatural    (natural);
+        varispeed.process       (buffer, modData, transientFlags);
+    }
+    else
+    {
+        for (int s = 0; s < numSamples; ++s)
         {
-            auto* wet    = buffer.getWritePointer (ch);
-            auto* dryPtr = dry.getReadPointer (ch);
-            for (int i = 0; i < numSamples; ++i)
-                wet[i] = wet[i] * mix + dryPtr[i] * (1.0f - mix);
+            for (int c = 0; c < numCh; ++c)
+            {
+                const float in = buffer.getSample (c, s);
+                bypassDelay.pushSample (c, in);
+                buffer.setSample (c, s, bypassDelay.popSample (c));
+            }
         }
     }
 
     // ============================================================================
-    // Varispeed with sample-accurate wow/flutter modulation + transient awareness
-    // ============================================================================
-    wowFlutter.setAmounts (wowAmt, flutterAmt);
-
-    if (modBuffer.getNumSamples() < numSamples)
-        modBuffer.setSize (1, numSamples, false, false, true);
-
-    auto* modData = modBuffer.getWritePointer (0);
-    for (int s = 0; s < numSamples; ++s)
-        modData[s] = wowFlutter.tick();
-
-    varispeed.setPitchRatio (speedRatio);
-    varispeed.setNatural    (natural);
-    varispeed.process       (buffer, modData, transientFlags);
-
-    // ============================================================================
-    // Post-varispeed colour: Sparkle (multi-band exciter) → Hiss → HPF → trim
+    // Post-varispeed colour
     // ============================================================================
     sparkle.setAmount  (sparkleAmt);
     sparkle.process    (buffer);
@@ -211,15 +239,30 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // Safety scrub
+    // TRUE Mix: blend latency-matched dry input against fully processed wet.
+    // Mix = 0 → output is the clean delayed dry (effective bypass).
+    // Mix = 100 → output is fully processed wet.
     // ============================================================================
-    for (int ch = 0; ch < numCh; ++ch)
+    if (mix < 0.999f)
     {
-        auto* d = buffer.getWritePointer (ch);
-        for (int i = 0; i < numSamples; ++i)
+        const float oneMinusMix = 1.0f - mix;
+        for (int c = 0; c < numCh; ++c)
         {
-            if (! std::isfinite (d[i])) d[i] = 0.0f;
-            else d[i] = juce::jlimit (-4.0f, 4.0f, d[i]);
+            auto* w = buffer.getWritePointer (c);
+            auto* d = delayedDryBuffer.getReadPointer (c);
+            for (int s = 0; s < numSamples; ++s)
+                w[s] = w[s] * mix + d[s] * oneMinusMix;
+        }
+    }
+
+    // ---- Safety scrub ----
+    for (int c = 0; c < numCh; ++c)
+    {
+        auto* d = buffer.getWritePointer (c);
+        for (int s = 0; s < numSamples; ++s)
+        {
+            if (! std::isfinite (d[s])) d[s] = 0.0f;
+            else d[s] = juce::jlimit (-4.0f, 4.0f, d[s]);
         }
     }
 }
