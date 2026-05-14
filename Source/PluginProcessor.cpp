@@ -19,7 +19,7 @@ TapeSweetProcessor::createParameterLayout()
     params.push_back (std::make_unique<P>("speed",   "Speed",   R(-10.0f, 10.0f,   0.01f),   0.0f,  "%"));
     params.push_back (std::make_unique<P>("natural", "Natural", R(0.0f,   100.0f,  0.1f),   60.0f,  "%"));
     params.push_back (std::make_unique<P>("warm",    "Warm",    R(0.0f,   100.0f,  0.1f),   25.0f,  "%"));
-    params.push_back (std::make_unique<P>("wear",    "Wear",    R(0.0f,   100.0f,  0.1f),    0.0f,  "%"));
+    params.push_back (std::make_unique<P>("wear",    "Color",   R(0.0f,   100.0f,  0.1f),    0.0f,  "%"));
     params.push_back (std::make_unique<P>("mix",     "Mix",     R(0.0f,   100.0f,  0.1f),  100.0f,  "%"));
     params.push_back (std::make_unique<P>("output",  "Output",  R(-12.0f, 12.0f,   0.01f),   0.0f, "dB"));
     return { params.begin(), params.end() };
@@ -100,17 +100,18 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // Macro mappings - each knob drives multiple internal stages in a coherent way
     // ============================================================================
 
-    // Warm: saturation density macro. At higher Warm values the saturator is
-    // driven harder AND fed a 3 kHz-boosted version of the signal, so it
-    // generates harmonics in the upper-mid band that imprint a "tape-mid"
-    // character. The heavily saturated leg is then parallel-blended with the
-    // pre-saturation signal so the user gets the harmonic colour without the
-    // full-band amplitude crush.
-    const float warmDriveDb   = warm * 10.0f;        // up to +10 dB into the saturator
-    const float bandEmphasisDb = warm * 6.0f;        // up to +6 dB mid emphasis pre-sat
-    const float satMix        = warm * 0.55f;        // up to 55 % parallel blend
-    const float warmthDb      = warm * 3.0f;
-    const float glueBlend     = warm * 0.15f;
+    // Warm: saturation density macro. The saturator itself is driven hard at
+    // the top of the knob (up to +14 dB plus +8 dB mid-band emphasis), so the
+    // wet leg is full of harmonic content. We then parallel-blend only a small
+    // fraction of that heavily-saturated leg back in. The blend curve is
+    // quadratic so the bottom of the knob stays clean and character only
+    // blooms in the upper half - matching the Ableton Overdrive recipe of
+    // "high drive + low Dry/Wet" rather than "moderate drive + high Dry/Wet."
+    const float warmDriveDb    = warm * 14.0f;
+    const float bandEmphasisDb = warm * 8.0f;
+    const float satMix         = warm * warm * 0.12f;  // max 12 %, quadratic
+    const float warmthDb       = warm * 3.0f;
+    const float glueBlend      = warm * 0.15f;
 
     // Wear: imperfection macro. wow + flutter + hiss only. Hiss is quadratic
     // so the bottom half of the knob stays clean.

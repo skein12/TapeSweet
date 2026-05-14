@@ -19,7 +19,7 @@ few knobs, get a finished-feeling 80s-ish sweetened sound."
 | Speed   | Pitch / varispeed amount                                        |
 | Natural | Varispeed quality (smoothness, anti-artifact). Nothing else.    |
 | Warm    | Saturation density: drive, head bump, parallel glue compression |
-| Wear    | Imperfection: wow, flutter, hiss (subtle below 50 %)            |
+| Color    | Imperfection: wow, flutter, hiss (subtle below 50 %)            |
 | Mix     | True wet/dry. Mix = 0 % is full bypass (latency-matched dry)    |
 | Output  | Final trim                                                      |
 
@@ -27,8 +27,8 @@ few knobs, get a finished-feeling 80s-ish sweetened sound."
 |---------|----------------|---------|------------------------------------------|
 | Speed   | -10 to +10 %   | 0 %     | At 0 % the varispeed engine is bypassed with a constant-latency delay. |
 | Natural | 0-100 %        | 60 %    | Varispeed grain length (40-80 ms), grain jitter, WSOLA search width. |
-| Warm    | 0-100 %        | 25 %    | Mid-focused tape colour. Drives the saturator (0-10 dB), pre-boosts a 3 kHz peak going into it (0-6 dB) and matched-cuts after, blends the heavily saturated leg back in parallel (0-55 %), lifts the head bump (0-3 dB), and adds a hidden parallel glue compressor (0-15 %). Auto-makeup. |
-| Wear    | 0-100 %        | 0 %     | Tape transport imperfection. Wow (slow ~0.45 Hz capstan-rate pitch drift) + flutter (~9 Hz mechanical jitter) scale linearly. Hiss (pink-tinted noise floor that breathes with the program; auto-mutes during silence) scales quadratically so the bottom half of the knob stays clean. At Wear = 0 the plugin is stable and silent; at 100 % it sounds like a worn machine. |
+| Warm    | 0-100 %        | 25 %    | Mid-focused tape colour. Drives the saturator hard (0-14 dB) with a +0-8 dB peak at 3 kHz going in (matched cut going out), then parallel-blends a quadratic-curved 0-12 % of that heavily-saturated leg back with the pre-sat signal. Also lifts the head bump (0-3 dB) and adds hidden glue compression (0-15 %). Auto-makeup. |
+| Color    | 0-100 %        | 0 %     | Tape transport imperfection. Wow (slow ~0.45 Hz capstan-rate pitch drift) + flutter (~9 Hz mechanical jitter) scale linearly. Hiss (pink-tinted noise floor that breathes with the program; auto-mutes during silence) scales quadratically so the bottom half of the knob stays clean. At Color = 0 the plugin is stable and silent; at 100 % it sounds like a worn machine. |
 | Mix     | 0-100 %        | 100 %   | Wet vs latency-matched dry. Mix = 0 % is a literal bypass of the entire plugin chain. |
 | Output  | -12 to +12 dB  | 0 dB    |                                          |
 
@@ -45,9 +45,9 @@ Input
   |   Speed-coupled head bump (peak filter, gain from Warm)
   |   Parallel glue compressor (blend from Warm)
   |   Varispeed (8-tap windowed-sinc, WSOLA-aligned wraps with transient
-  |              awareness, sample-accurate wow/flutter from Wear)
-  |              -- or constant-latency bypass when Speed AND Wear are 0
-  |   Tape hiss (Wear, signal-modulated)
+  |              awareness, sample-accurate wow/flutter from Color)
+  |              -- or constant-latency bypass when Speed AND Color are 0
+  |   Tape hiss (Color, signal-modulated)
   |   30 Hz HPF
   |   Output trim
   +-> Mix(wet, delayed_dry)
@@ -89,6 +89,16 @@ Then rescan in your DAW.
 
 ## Status
 
+v0.11.0 - Color rename + Ableton-Overdrive-style parallel sat balance.
+
+- Wear knob renamed to "Color" (param ID kept as "wear" so existing host
+  state still loads).
+- Parallel sat blend max reduced 55 % -> 12 % to match the Ableton
+  Overdrive Dry/Wet recipe. To keep the 12 % audibly potent, drive max
+  pushed 10 -> 14 dB and band emphasis 6 -> 8 dB. Curve on the blend is
+  now quadratic so the bottom of the Warm knob stays clean and character
+  only blooms in the upper half.
+
 v0.10.0 - mid-focused saturation overhaul.
 
 - Replaced wide-band NAB pre/de-emphasis (HF shelf at 3.2 kHz) with a
@@ -105,7 +115,7 @@ v0.10.0 - mid-focused saturation overhaul.
 v0.9.0 - UI redesign and code cleanup pass.
 
 - Two-tier knob layout: Speed and Natural as the featured large rotaries
-  (the expressive featured controls), Warm and Wear as smaller rotaries
+  (the expressive featured controls), Warm and Color as smaller rotaries
   below.
 - Mix is now a horizontal slider across the bottom of the window. Output
   is a vertical fader on the right (mixing-console style).
@@ -119,7 +129,7 @@ v0.8.0 - magic-knob refactor.
 - Natural now only controls varispeed quality (no hidden brightness).
 - Warm is now the saturation density macro - drives saturator, head bump,
   AND a hidden parallel glue compressor (max 18 % blend).
-- Wear is back as a separate imperfection knob (wow + flutter + hiss).
-- Fixed 18 kHz HF rolloff removed so Warm = 0 + Speed = 0 + Wear = 0 +
+- Color is back as a separate imperfection knob (wow + flutter + hiss).
+- Fixed 18 kHz HF rolloff removed so Warm = 0 + Speed = 0 + Color = 0 +
   Mix = 100 % is now genuinely transparent (subject to NAB shelves
   cancelling, which they do for linear signal).

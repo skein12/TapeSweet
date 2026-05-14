@@ -230,7 +230,7 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
     speedC   = std::make_unique<Control> (proc.apvts, "speed",   "Speed",   S::BigKnob,   1, " %");
     naturalC = std::make_unique<Control> (proc.apvts, "natural", "Natural", S::BigKnob,   0, " %");
     warmC    = std::make_unique<Control> (proc.apvts, "warm",    "Warm",    S::SmallKnob, 0, " %");
-    wearC    = std::make_unique<Control> (proc.apvts, "wear",    "Wear",    S::SmallKnob, 0, " %");
+    wearC    = std::make_unique<Control> (proc.apvts, "wear",    "Color",   S::SmallKnob, 0, " %");
     mixC     = std::make_unique<Control> (proc.apvts, "mix",     "Mix",     S::HSlider,   0, " %");
     outputC  = std::make_unique<Control> (proc.apvts, "output",  "Output",  S::VFader,    1, " dB");
 
