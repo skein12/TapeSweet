@@ -1,7 +1,7 @@
 # TapeSweet
 
 An AU/VST3 plugin that emulates pushing 80s analog multitrack tape a few percent
-hotter and a few percent faster — the trick behind records like *Into the Groove*
+hotter and a few percent faster the trick behind records like *Into the Groove*
 and other 80s hits where the multitrack was played back slightly fast for sheen.
 
 Built with JUCE 8. Black/minimalist UI, designed to be readable at a glance.
