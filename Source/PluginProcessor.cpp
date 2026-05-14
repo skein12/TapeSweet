@@ -15,6 +15,7 @@ TapeSweetProcessor::createParameterLayout()
     using R = juce::NormalisableRange<float>;
 
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back (std::make_unique<P>("speed",  "Speed",  R(-10.0f, 10.0f,  0.01f), 0.0f,     "%"));
     params.push_back (std::make_unique<P>("drive",  "Drive",  R(0.0f, 10.0f,    0.01f), 3.0f,     "dB"));
     params.push_back (std::make_unique<P>("warmth", "Warmth", R(0.0f, 3.0f,     0.01f), 1.5f,     "dB"));
     params.push_back (std::make_unique<P>("tone",   "Tone",   R(8000.0f, 22000.0f, 1.0f), 16000.0f, "Hz"));
@@ -33,6 +34,9 @@ void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     hfRolloff.prepare (spec);
     oversampler.initProcessing ((size_t) samplesPerBlock);
     oversampler.reset();
+
+    varispeed.prepare (sampleRate, 2);
+    setLatencySamples (varispeed.getLatencySamples());
 }
 
 void TapeSweetProcessor::releaseResources() {}
@@ -51,11 +55,12 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const int numCh      = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    const float drive  = apvts.getRawParameterValue ("drive") ->load();
-    const float warmth = apvts.getRawParameterValue ("warmth")->load();
-    const float toneHz = apvts.getRawParameterValue ("tone")  ->load();
-    const float mixPct = apvts.getRawParameterValue ("mix")   ->load();
-    const float outDb  = apvts.getRawParameterValue ("output")->load();
+    const float speedPct = apvts.getRawParameterValue ("speed") ->load();
+    const float drive    = apvts.getRawParameterValue ("drive") ->load();
+    const float warmth   = apvts.getRawParameterValue ("warmth")->load();
+    const float toneHz   = apvts.getRawParameterValue ("tone")  ->load();
+    const float mixPct   = apvts.getRawParameterValue ("mix")   ->load();
+    const float outDb    = apvts.getRawParameterValue ("output")->load();
 
     const float mix       = mixPct * 0.01f;
     const float driveGain = juce::Decibels::decibelsToGain (drive);
@@ -69,6 +74,12 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     *hfRolloff.state = *juce::dsp::IIR::Coefficients<float>::makeFirstOrderLowPass (
         currentSampleRate, toneHz);
 
+    // 1. Varispeed — pitch + formant shift (always runs to keep latency constant)
+    varispeed.setPitchRatio (1.0f + speedPct * 0.01f);
+    varispeed.process (buffer);
+
+    // Dry captured AFTER varispeed so Mix blends just the saturation/EQ stage
+    // (otherwise low Mix values would phase against the unshifted dry signal)
     juce::AudioBuffer<float> dry;
     dry.makeCopyOf (buffer);
 

@@ -4,6 +4,8 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 
+#include "Varispeed.h"
+
 class TapeSweetProcessor : public juce::AudioProcessor
 {
 public:
@@ -45,6 +47,8 @@ private:
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hfRolloff;
     juce::dsp::Oversampling<float> oversampler
         { 2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
+
+    Varispeed varispeed;
 
     double currentSampleRate = 44100.0;
 
