@@ -53,17 +53,17 @@ struct TapeSweetEditor::KnobControl : public juce::Component
     void paint (juce::Graphics& g) override
     {
         g.setColour (Col::subtle);
-        auto font = juce::Font (juce::FontOptions (10.0f)).withExtraKerningFactor (0.18f);
+        auto font = juce::Font (juce::FontOptions (10.0f)).withExtraKerningFactor (0.22f);
         g.setFont (font);
         g.drawText (nameText.toUpperCase(),
-                    getLocalBounds().removeFromTop (16),
+                    getLocalBounds().removeFromTop (18),
                     juce::Justification::centred);
     }
 
     void resized() override
     {
         auto b = getLocalBounds();
-        b.removeFromTop (20);
+        b.removeFromTop (22);
         slider.setBounds (b);
     }
 
@@ -85,7 +85,7 @@ void TapeSweetLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, in
                                              float pos, float startAng, float endAng,
                                              juce::Slider&)
 {
-    const float diameter = (float) juce::jmin (w, h) - 8.0f;
+    const float diameter = (float) juce::jmin (w, h) - 10.0f;
     const float radius   = diameter * 0.5f;
     const float cx = (float) x + (float) w * 0.5f;
     const float cy = (float) y + (float) h * 0.5f;
@@ -106,7 +106,7 @@ void TapeSweetLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, in
                                                 juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
 
-    const float innerR = radius - 8.0f;
+    const float innerR = radius - 9.0f;
     const float outerR = radius - 2.0f;
     const float sinA = std::sin (currentAng);
     const float cosA = std::cos (currentAng);
@@ -152,22 +152,17 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
         int decimals;
         const char* suffix;
         double scale;
-        int row;
     };
 
-    // Row 0 = Tape Machine controls (transport-flavoured)
-    // Row 1 = Sound / Tone shaping
     static const Spec specs[] =
     {
-        { "speed",   "Speed",   1, " %",   1.0,   0 },
-        { "natural", "Natural", 0, " %",   1.0,   0 },
-        { "wear",    "Wear",    0, " %",   1.0,   0 },
-        { "hiss",    "Hiss",    0, " %",   1.0,   0 },
-        { "drive",   "Drive",   1, " dB",  1.0,   1 },
-        { "warmth",  "Warmth",  1, " dB",  1.0,   1 },
-        { "tone",    "Tone",    1, " kHz", 0.001, 1 },
-        { "mix",     "Mix",     0, " %",   1.0,   1 },
-        { "output",  "Output",  1, " dB",  1.0,   1 },
+        { "speed",   "Speed",   1, " %",   1.0    },
+        { "natural", "Natural", 0, " %",   1.0    },
+        { "drive",   "Drive",   1, " dB",  1.0    },
+        { "warm",    "Warm",    0, " %",   1.0    },
+        { "tone",    "Tone",    1, " kHz", 0.001  },
+        { "mix",     "Mix",     0, " %",   1.0    },
+        { "output",  "Output",  1, " dB",  1.0    },
     };
 
     for (auto& spec : specs)
@@ -177,11 +172,10 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
                                                    spec.decimals, spec.suffix,
                                                    spec.scale);
         addAndMakeVisible (knob.get());
-        rowOf.push_back (spec.row);
         knobs.push_back (std::move (knob));
     }
 
-    setSize (640, 360);
+    setSize (770, 230);
 }
 
 TapeSweetEditor::~TapeSweetEditor()
@@ -193,45 +187,26 @@ void TapeSweetEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Col::bg);
 
-    auto titleBounds = getLocalBounds().removeFromTop (52).toFloat();
-    auto titleFont = juce::Font (juce::FontOptions (13.0f)).withExtraKerningFactor (0.42f);
+    auto titleBounds = getLocalBounds().removeFromTop (56).toFloat();
+    auto titleFont = juce::Font (juce::FontOptions (13.0f)).withExtraKerningFactor (0.46f);
     g.setFont (titleFont);
     g.setColour (Col::ink);
     g.drawText ("TAPESWEET", titleBounds, juce::Justification::centred);
 
     g.setColour (Col::knobTrack);
-    auto line = getLocalBounds().removeFromTop (53).removeFromBottom (1).reduced (32, 0);
+    auto line = getLocalBounds().removeFromTop (57).removeFromBottom (1).reduced (40, 0);
     g.fillRect (line);
 }
 
 void TapeSweetEditor::resized()
 {
     auto bounds = getLocalBounds();
-    bounds.removeFromTop (60);
-    bounds.removeFromBottom (12);
+    bounds.removeFromTop (64);
+    bounds.removeFromBottom (14);
+    bounds.reduce (18, 0);
 
-    const int knobWidth = 120;
-    const int rowHeight = bounds.getHeight() / 2;
-    const int totalWidth = getWidth();
-
-    auto layoutRow = [&] (int row, juce::Rectangle<int> area)
-    {
-        int count = 0;
-        for (size_t i = 0; i < knobs.size(); ++i)
-            if (rowOf[i] == row) ++count;
-
-        const int rowPixelWidth = knobWidth * count;
-        int x = (totalWidth - rowPixelWidth) / 2;
-        for (size_t i = 0; i < knobs.size(); ++i)
-        {
-            if (rowOf[i] != row) continue;
-            knobs[i]->setBounds (x, area.getY(), knobWidth, area.getHeight());
-            x += knobWidth;
-        }
-    };
-
-    auto rowTape  = bounds.removeFromTop (rowHeight);
-    auto rowSound = bounds;
-    layoutRow (0, rowTape);
-    layoutRow (1, rowSound);
+    const int n = (int) knobs.size();
+    const int slot = bounds.getWidth() / n;
+    for (int i = 0; i < n; ++i)
+        knobs[(size_t) i]->setBounds (bounds.removeFromLeft (slot).reduced (4, 0));
 }

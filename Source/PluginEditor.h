@@ -31,7 +31,6 @@ private:
     TapeSweetProcessor& proc;
     TapeSweetLookAndFeel laf;
     std::vector<std::unique_ptr<KnobControl>> knobs;
-    std::vector<int> rowOf;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TapeSweetEditor)
 };

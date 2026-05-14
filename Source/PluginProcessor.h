@@ -9,6 +9,8 @@
 #include "ScrapeFlutter.h"
 #include "TapeHiss.h"
 #include "NABEmphasis.h"
+#include "TapeSaturator.h"
+#include "Sparkle.h"
 
 class TapeSweetProcessor : public juce::AudioProcessor
 {
@@ -54,10 +56,14 @@ private:
     juce::dsp::Oversampling<float> oversampler
         { 2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
 
+    TapeSaturator saturator;
     Varispeed     varispeed;
     WowFlutter    wowFlutter;
+    Sparkle       sparkle;
     ScrapeFlutter scrapeFlutter;
     TapeHiss      tapeHiss;
+
+    juce::AudioBuffer<float> modBuffer;
 
     double currentSampleRate = 44100.0;
 

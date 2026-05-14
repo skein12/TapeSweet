@@ -16,15 +16,13 @@ TapeSweetProcessor::createParameterLayout()
     using R = juce::NormalisableRange<float>;
 
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    params.push_back (std::make_unique<P>("speed",   "Speed",   R(-10.0f, 10.0f,  0.01f),   0.0f,  "%"));
-    params.push_back (std::make_unique<P>("natural", "Natural", R(0.0f,  100.0f,  0.1f),   60.0f,  "%"));
-    params.push_back (std::make_unique<P>("drive",   "Drive",   R(0.0f,   10.0f,  0.01f),   3.0f, "dB"));
-    params.push_back (std::make_unique<P>("warmth",  "Warmth",  R(0.0f,    3.0f,  0.01f),   1.5f, "dB"));
+    params.push_back (std::make_unique<P>("speed",   "Speed",   R(-10.0f, 10.0f,   0.01f),   0.0f,    "%"));
+    params.push_back (std::make_unique<P>("natural", "Natural", R(0.0f,   100.0f,  0.1f),   60.0f,    "%"));
+    params.push_back (std::make_unique<P>("drive",   "Drive",   R(0.0f,   10.0f,   0.01f),   3.0f,   "dB"));
+    params.push_back (std::make_unique<P>("warm",    "Warm",    R(0.0f,   100.0f,  0.1f),   20.0f,    "%"));
     params.push_back (std::make_unique<P>("tone",    "Tone",    R(8000.0f, 22000.0f, 1.0f), 16000.0f, "Hz"));
-    params.push_back (std::make_unique<P>("wear",    "Wear",    R(0.0f,  100.0f,  0.1f),   15.0f,  "%"));
-    params.push_back (std::make_unique<P>("mix",     "Mix",     R(0.0f,  100.0f,  0.1f),  100.0f,  "%"));
-    params.push_back (std::make_unique<P>("hiss",    "Hiss",    R(0.0f,  100.0f,  0.1f),    0.0f,  "%"));
-    params.push_back (std::make_unique<P>("output",  "Output",  R(-12.0f, 12.0f,  0.01f),   0.0f, "dB"));
+    params.push_back (std::make_unique<P>("mix",     "Mix",     R(0.0f,   100.0f,  0.1f),  100.0f,    "%"));
+    params.push_back (std::make_unique<P>("output",  "Output",  R(-12.0f, 12.0f,   0.01f),   0.0f,   "dB"));
     return { params.begin(), params.end() };
 }
 
@@ -43,13 +41,16 @@ void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     oversampler.initProcessing ((size_t) samplesPerBlock);
     oversampler.reset();
+    saturator.prepare (2);
 
     varispeed.prepare     (sampleRate, 2);
     wowFlutter.prepare    (sampleRate);
+    sparkle.prepare       (sampleRate, 2);
     scrapeFlutter.prepare (sampleRate, 2);
     tapeHiss.prepare      (sampleRate);
 
-    // 30 Hz subsonic HPF — fixed corner
+    modBuffer.setSize (1, samplesPerBlock, false, false, true);
+
     *hpf30.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass (
         sampleRate, 30.0f, 0.707f);
 
@@ -72,42 +73,53 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const int numCh      = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    const float speedPct  = apvts.getRawParameterValue ("speed")  ->load();
-    const float natural   = apvts.getRawParameterValue ("natural")->load() * 0.01f;
-    const float drive     = apvts.getRawParameterValue ("drive")  ->load();
-    const float warmth    = apvts.getRawParameterValue ("warmth") ->load();
-    const float toneHz    = apvts.getRawParameterValue ("tone")   ->load();
-    const float wear      = apvts.getRawParameterValue ("wear")   ->load() * 0.01f;
-    const float mixPct    = apvts.getRawParameterValue ("mix")    ->load();
-    const float hissAmt   = apvts.getRawParameterValue ("hiss")   ->load() * 0.01f;
-    const float outDb     = apvts.getRawParameterValue ("output") ->load();
+    // ---- Parameter reads ----
+    const float speedPct = apvts.getRawParameterValue ("speed")  ->load();
+    const float natural  = apvts.getRawParameterValue ("natural")->load() * 0.01f;
+    const float drive    = apvts.getRawParameterValue ("drive")  ->load();
+    const float warm     = apvts.getRawParameterValue ("warm")   ->load() * 0.01f;
+    const float toneHz   = apvts.getRawParameterValue ("tone")   ->load();
+    const float mixPct   = apvts.getRawParameterValue ("mix")    ->load();
+    const float outDb    = apvts.getRawParameterValue ("output") ->load();
 
-    const float mix       = mixPct * 0.01f;
-    const float driveGain = juce::Decibels::decibelsToGain (drive);
-    const float outGain   = juce::Decibels::decibelsToGain (outDb);
-    const float makeup    = juce::Decibels::decibelsToGain (-drive * 0.5f);
+    // ---- Warm knob breakdown — coherent curves so one knob feels musical ----
+    // Subtle to extreme tape character without exposing four separate sliders.
+    const float warmthDb   = warm * 3.0f;         // head bump 0–3 dB
+    const float wowAmt     = warm * 0.6f;         // 0–60% of max wow depth
+    const float flutterAmt = warm * 0.6f;
+    const float scrapeAmt  = warm * 0.5f;
+    const float hissAmt    = warm * warm * 0.4f;  // quadratic — hiss only at high settings
+
+    // ---- Natural knob breakdown — pitch smoothness AND sparkle scale together ----
+    const float sparkleAmt = natural * natural * 0.7f; // quadratic so sparkle blooms late
+
+    // ---- Derived ----
+    const float mix        = mixPct * 0.01f;
+    const float driveGain  = juce::Decibels::decibelsToGain (drive);
+    const float outGain    = juce::Decibels::decibelsToGain (outDb);
+    const float makeup     = juce::Decibels::decibelsToGain (-drive * 0.5f);
     const float speedRatio = 1.0f + speedPct * 0.01f;
 
-    // Speed-coupled head bump — broad peak that tracks Speed
+    // ---- Speed-coupled filter coefficients (clamped to stay below Nyquist) ----
     *headBump.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
         currentSampleRate,
         juce::jlimit (40.0f, 200.0f, 80.0f * speedRatio),
         0.7f,
-        juce::Decibels::decibelsToGain (warmth));
+        juce::Decibels::decibelsToGain (warmthDb));
 
-    // Speed-coupled gap-loss — corner tracks Speed and is clamped well below
-    // Nyquist so the IIR stays stable (over-Nyquist makes the filter explode
-    // into NaN which sounds like a 90 dB burst — exactly what v0.4.0 did).
     const float maxCorner = (float) currentSampleRate * 0.45f;
     const float gapCorner = juce::jlimit (2000.0f, maxCorner, toneHz * speedRatio);
     *gapLoss.state = *juce::dsp::IIR::Coefficients<float>::makeFirstOrderLowPass (
         currentSampleRate, gapCorner);
 
-    // Stash dry copy for Mix (pre-saturation, post-input)
+    // ---- Capture dry copy for Mix ----
     juce::AudioBuffer<float> dry;
     dry.makeCopyOf (buffer);
 
-    // ===== Wet path: pre-emph -> drive -> sat -> de-emph -> head bump -> gap-loss =====
+    // ============================================================================
+    // WET PATH:  pre-emph → drive → tape-sat (oversampled, with memory) →
+    //            de-emph → speed-coupled head bump → speed-coupled gap-loss
+    // ============================================================================
     preEmph.process (buffer);
 
     {
@@ -119,10 +131,8 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         {
             auto* data = upBlock.getChannelPointer (ch);
             const size_t n = upBlock.getNumSamples();
-            const float bias = 0.1f;
-            const float biasOut = std::tanh (bias);
             for (size_t i = 0; i < n; ++i)
-                data[i] = std::tanh (data[i] + bias) - biasOut;
+                data[i] = saturator.processSample ((int) ch, data[i]);
         }
         oversampler.processSamplesDown (block);
 
@@ -138,8 +148,9 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         gapLoss.process  (ctx);
     }
 
-    // ===== Mix dry/wet BEFORE varispeed so the speed effect applies to both
-    //       (and we avoid phasing between shifted-wet vs unshifted-dry) =====
+    // ============================================================================
+    // Mix dry/wet BEFORE varispeed (so both share the same pitch shift)
+    // ============================================================================
     if (mix < 0.999f)
     {
         for (int ch = 0; ch < numCh; ++ch)
@@ -151,37 +162,34 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         }
     }
 
-    // ===== Varispeed with sample-rate wow/flutter modulation =====
-    // Wear governs wow/flutter depth + scrape level. Natural adds a tiny
-    // baseline wow (0.05 max) that masks residual grain artefacts without
-    // making the plugin feel "wobbly" when Wear is at zero.
-    const float wowAmt     = juce::jmin (1.0f, wear + natural * 0.05f);
-    const float flutterAmt = wear;
+    // ============================================================================
+    // Varispeed with sample-accurate wow/flutter
+    // ============================================================================
     wowFlutter.setAmounts (wowAmt, flutterAmt);
+
+    if (modBuffer.getNumSamples() < numSamples)
+        modBuffer.setSize (1, numSamples, false, false, true);
+
+    auto* modData = modBuffer.getWritePointer (0);
+    for (int s = 0; s < numSamples; ++s)
+        modData[s] = wowFlutter.tick();
 
     varispeed.setPitchRatio (speedRatio);
     varispeed.setNatural    (natural);
+    varispeed.process       (buffer, modData);
 
-    // Drive the varispeed with per-sample wow/flutter modulation. We feed a
-    // block-rate average since varispeed.process is block-based — the
-    // pitch modulation moves slowly enough (≤12 Hz) that sample-accuracy
-    // isn't needed for the wow/flutter character.
-    float modSum = 0.0f;
-    for (int s = 0; s < numSamples; ++s)
-        modSum += wowFlutter.tick();
-    varispeed.setPitchModulationCents (modSum / (float) numSamples);
+    // ============================================================================
+    // Post-varispeed colour: HF Sparkle exciter → scrape flutter → hiss → HPF
+    // ============================================================================
+    sparkle.setAmount (sparkleAmt);
+    sparkle.process   (buffer);
 
-    varispeed.process (buffer);
+    scrapeFlutter.setAmount (scrapeAmt);
+    scrapeFlutter.process   (buffer);
 
-    // ===== Scrape flutter — wear-controlled high-frequency haze =====
-    scrapeFlutter.setAmount (wear);
-    scrapeFlutter.process (buffer);
-
-    // ===== Tape hiss — pink, signal-modulated, auto-muted on silence =====
     tapeHiss.setAmount (hissAmt);
-    tapeHiss.process (buffer);
+    tapeHiss.process   (buffer);
 
-    // ===== 30 Hz HPF and output trim =====
     {
         juce::dsp::AudioBlock<float> block (buffer);
         juce::dsp::ProcessContextReplacing<float> ctx (block);
@@ -189,8 +197,9 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         block.multiplyBy (outGain);
     }
 
-    // ===== Safety: scrub any NaN/Inf and clamp catastrophic peaks. If a
-    // filter goes unstable mid-block we'd otherwise blast the user's monitors.
+    // ============================================================================
+    // Safety: scrub NaN/Inf and clamp catastrophic peaks.
+    // ============================================================================
     for (int ch = 0; ch < numCh; ++ch)
     {
         auto* d = buffer.getWritePointer (ch);
