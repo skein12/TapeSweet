@@ -16,43 +16,45 @@ TapeSweetProcessor::createParameterLayout()
     using R = juce::NormalisableRange<float>;
 
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    params.push_back (std::make_unique<P>("speed",   "Speed",   R(-10.0f, 10.0f,   0.01f),   0.0f,    "%"));
-    params.push_back (std::make_unique<P>("natural", "Natural", R(0.0f,   100.0f,  0.1f),   60.0f,    "%"));
-    params.push_back (std::make_unique<P>("drive",   "Drive",   R(0.0f,   10.0f,   0.01f),   3.0f,   "dB"));
-    params.push_back (std::make_unique<P>("warm",    "Warm",    R(0.0f,   100.0f,  0.1f),   20.0f,    "%"));
-    params.push_back (std::make_unique<P>("tone",    "Tone",    R(8000.0f, 22000.0f, 1.0f), 16000.0f, "Hz"));
-    params.push_back (std::make_unique<P>("mix",     "Mix",     R(0.0f,   100.0f,  0.1f),  100.0f,    "%"));
-    params.push_back (std::make_unique<P>("output",  "Output",  R(-12.0f, 12.0f,   0.01f),   0.0f,   "dB"));
+    params.push_back (std::make_unique<P>("speed",   "Speed",   R(-10.0f, 10.0f,  0.01f),  0.0f,  "%"));
+    params.push_back (std::make_unique<P>("natural", "Natural", R(0.0f,   100.0f, 0.1f),  60.0f,  "%"));
+    params.push_back (std::make_unique<P>("drive",   "Drive",   R(0.0f,   10.0f,  0.01f),  3.0f, "dB"));
+    params.push_back (std::make_unique<P>("warm",    "Warm",    R(0.0f,   100.0f, 0.1f),  25.0f,  "%"));
+    params.push_back (std::make_unique<P>("mix",     "Mix",     R(0.0f,   100.0f, 0.1f), 100.0f,  "%"));
+    params.push_back (std::make_unique<P>("output",  "Output",  R(-12.0f, 12.0f,  0.01f),  0.0f, "dB"));
     return { params.begin(), params.end() };
 }
 
 void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
-    juce::dsp::ProcessSpec spec { sampleRate,
-                                  (juce::uint32) samplesPerBlock,
-                                  2 };
+    juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 2 };
 
-    preEmph.prepare (sampleRate, 2, NABEmphasis::Pre);
-    deEmph.prepare  (sampleRate, 2, NABEmphasis::De);
+    preEmph.prepare  (sampleRate, 2, NABEmphasis::Pre);
+    deEmph.prepare   (sampleRate, 2, NABEmphasis::De);
     headBump.prepare (spec);
-    gapLoss.prepare  (spec);
+    fixedAir.prepare (spec);
     hpf30.prepare    (spec);
 
     oversampler.initProcessing ((size_t) samplesPerBlock);
     oversampler.reset();
-    saturator.prepare (2);
+    saturator.prepare (sampleRate * 4.0, 2);   // saturator runs at oversampled rate
 
-    varispeed.prepare     (sampleRate, 2);
-    wowFlutter.prepare    (sampleRate);
-    sparkle.prepare       (sampleRate, 2);
-    scrapeFlutter.prepare (sampleRate, 2);
-    tapeHiss.prepare      (sampleRate);
+    varispeed.prepare         (sampleRate, 2);
+    wowFlutter.prepare        (sampleRate);
+    sparkle.prepare           (sampleRate, 2);
+    tapeHiss.prepare          (sampleRate);
+    transientDetector.prepare (sampleRate, 2);
 
-    modBuffer.setSize (1, samplesPerBlock, false, false, true);
+    modBuffer.setSize       (1, samplesPerBlock, false, false, true);
+    transientBuffer.setSize (1, samplesPerBlock, false, false, true);
 
     *hpf30.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass (
         sampleRate, 30.0f, 0.707f);
+
+    // Fixed gentle HF rolloff at 18 kHz — replaces user-controlled Tone
+    *fixedAir.state = *juce::dsp::IIR::Coefficients<float>::makeFirstOrderLowPass (
+        sampleRate, juce::jmin (18000.0f, (float) sampleRate * 0.45f));
 
     setLatencySamples (varispeed.getLatencySamples());
 }
@@ -73,25 +75,28 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const int numCh      = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    // ---- Parameter reads ----
+    // ============================================================================
+    // Parameter reads
+    // ============================================================================
     const float speedPct = apvts.getRawParameterValue ("speed")  ->load();
     const float natural  = apvts.getRawParameterValue ("natural")->load() * 0.01f;
     const float drive    = apvts.getRawParameterValue ("drive")  ->load();
     const float warm     = apvts.getRawParameterValue ("warm")   ->load() * 0.01f;
-    const float toneHz   = apvts.getRawParameterValue ("tone")   ->load();
     const float mixPct   = apvts.getRawParameterValue ("mix")    ->load();
     const float outDb    = apvts.getRawParameterValue ("output") ->load();
 
-    // ---- Warm knob breakdown — coherent curves so one knob feels musical ----
-    // Subtle to extreme tape character without exposing four separate sliders.
-    const float warmthDb   = warm * 3.0f;         // head bump 0–3 dB
-    const float wowAmt     = warm * 0.6f;         // 0–60% of max wow depth
+    // ============================================================================
+    // Warm knob → head bump + wow/flutter + hiss, with designed curves
+    // ============================================================================
+    const float warmthDb   = warm * 3.5f;          // head bump 0–3.5 dB
+    const float wowAmt     = warm * 0.7f;          // wow 0–70%
     const float flutterAmt = warm * 0.6f;
-    const float scrapeAmt  = warm * 0.5f;
-    const float hissAmt    = warm * warm * 0.4f;  // quadratic — hiss only at high settings
+    const float hissAmt    = warm * warm * 0.35f;  // quadratic — clean at low Warm
 
-    // ---- Natural knob breakdown — pitch smoothness AND sparkle scale together ----
-    const float sparkleAmt = natural * natural * 0.7f; // quadratic so sparkle blooms late
+    // ============================================================================
+    // Natural knob → varispeed smoothness + Sparkle (quadratic, blooms upper-half)
+    // ============================================================================
+    const float sparkleAmt = natural * natural * 0.9f;
 
     // ---- Derived ----
     const float mix        = mixPct * 0.01f;
@@ -100,25 +105,36 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const float makeup     = juce::Decibels::decibelsToGain (-drive * 0.5f);
     const float speedRatio = 1.0f + speedPct * 0.01f;
 
-    // ---- Speed-coupled filter coefficients (clamped to stay below Nyquist) ----
+    // Speed-coupled head bump (replaces low shelf with a broad peak)
     *headBump.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
         currentSampleRate,
         juce::jlimit (40.0f, 200.0f, 80.0f * speedRatio),
         0.7f,
         juce::Decibels::decibelsToGain (warmthDb));
 
-    const float maxCorner = (float) currentSampleRate * 0.45f;
-    const float gapCorner = juce::jlimit (2000.0f, maxCorner, toneHz * speedRatio);
-    *gapLoss.state = *juce::dsp::IIR::Coefficients<float>::makeFirstOrderLowPass (
-        currentSampleRate, gapCorner);
+    // ============================================================================
+    // Detect transients in the dry input — used to align varispeed wraps
+    // ============================================================================
+    if (transientBuffer.getNumSamples() < numSamples)
+        transientBuffer.setSize (1, numSamples, false, false, true);
+    auto* transientFlags = transientBuffer.getWritePointer (0);
+    for (int s = 0; s < numSamples; ++s)
+    {
+        float peak = 0.0f;
+        for (int c = 0; c < numCh; ++c)
+            peak = juce::jmax (peak, std::abs (buffer.getSample (c, s)));
+        transientFlags[s] = transientDetector.detect (0, peak) ? 1.0f : 0.0f;
+    }
 
-    // ---- Capture dry copy for Mix ----
+    // ============================================================================
+    // Capture dry copy for Mix
+    // ============================================================================
     juce::AudioBuffer<float> dry;
     dry.makeCopyOf (buffer);
 
     // ============================================================================
-    // WET PATH:  pre-emph → drive → tape-sat (oversampled, with memory) →
-    //            de-emph → speed-coupled head bump → speed-coupled gap-loss
+    // WET PATH: NAB pre-emph → drive → tape sat (oversampled) → NAB de-emph
+    //           → speed-coupled head bump → fixed air rolloff
     // ============================================================================
     preEmph.process (buffer);
 
@@ -145,11 +161,11 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         juce::dsp::AudioBlock<float> block (buffer);
         juce::dsp::ProcessContextReplacing<float> ctx (block);
         headBump.process (ctx);
-        gapLoss.process  (ctx);
+        fixedAir.process (ctx);
     }
 
     // ============================================================================
-    // Mix dry/wet BEFORE varispeed (so both share the same pitch shift)
+    // Dry/Wet blend BEFORE varispeed (both share the same pitch shift)
     // ============================================================================
     if (mix < 0.999f)
     {
@@ -163,7 +179,7 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // Varispeed with sample-accurate wow/flutter
+    // Varispeed with sample-accurate wow/flutter modulation + transient awareness
     // ============================================================================
     wowFlutter.setAmounts (wowAmt, flutterAmt);
 
@@ -176,16 +192,13 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     varispeed.setPitchRatio (speedRatio);
     varispeed.setNatural    (natural);
-    varispeed.process       (buffer, modData);
+    varispeed.process       (buffer, modData, transientFlags);
 
     // ============================================================================
-    // Post-varispeed colour: HF Sparkle exciter → scrape flutter → hiss → HPF
+    // Post-varispeed colour: Sparkle (multi-band exciter) → Hiss → HPF → trim
     // ============================================================================
-    sparkle.setAmount (sparkleAmt);
-    sparkle.process   (buffer);
-
-    scrapeFlutter.setAmount (scrapeAmt);
-    scrapeFlutter.process   (buffer);
+    sparkle.setAmount  (sparkleAmt);
+    sparkle.process    (buffer);
 
     tapeHiss.setAmount (hissAmt);
     tapeHiss.process   (buffer);
@@ -198,7 +211,7 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // Safety: scrub NaN/Inf and clamp catastrophic peaks.
+    // Safety scrub
     // ============================================================================
     for (int ch = 0; ch < numCh; ++ch)
     {

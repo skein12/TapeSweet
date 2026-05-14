@@ -10,53 +10,47 @@ Built with JUCE 8. Black/minimalist UI, designed to be readable at a glance.
 
 ```
 Input
+  → Transient detection (peak / envelope ratio, drives varispeed alignment)
   → NAB pre-emphasis (HF shelf, +3 dB @ 3.2 kHz)
   → Drive
-  → Asymmetric tape saturation with memory feedback (4× oversampled)
+  → Tape saturator (oversampled 4×): program-dependent input gain,
+                                       asymmetric soft-knee, memory feedback
   → NAB de-emphasis (HF shelf, −3 dB @ 3.2 kHz)
   → Speed-coupled head bump (peak filter, centre tracks Speed)
-  → Speed-coupled gap-loss (1-pole LPF, corner tracks Speed)
+  → Fixed air rolloff (gentle 18 kHz LPF)
   → Dry/wet mix
-  → Varispeed: 2-tap shifter, 8-tap windowed-sinc interpolation,
-                WSOLA-aligned grain wraps, sample-accurate wow/flutter
-  → HF Sparkle exciter (even-harmonic synthesis post-pitch)
-  → Scrape flutter (HF-noise-FM'd short delay)
+  → Varispeed: 8-tap windowed-sinc, WSOLA-aligned wraps with wider search
+                near transients, predictive tap-ducking so transients don't
+                duplicate, sample-accurate wow/flutter
+  → Multi-band HF Sparkle exciter (presence 2.5–7 kHz, air 8+ kHz)
   → Tape hiss (pink, signal-modulated, auto-muted on silence)
   → 30 Hz subsonic HPF
   → Output trim
   → NaN/clip safety scrub
 ```
 
-Saturation sits between NAB pre/de-emphasis with a leaky-integrator memory term
-that models tape hysteresis — the canonical reason real tape "softens transients"
-and adds upper-mid colour. The head bump and gap-loss corners both track Speed,
-which is the actual mechanism behind "sped-up tape sounds brighter" on real
-machines. WSOLA grain alignment minimises the pop/glitch artefact that 2-tap
-shifters typically produce at wrap boundaries.
-
 ## Parameters
 
-Seven knobs, each one designed to do a coherent thing across multiple DSP stages
-rather than expose every sub-parameter individually.
+Six knobs, each one drives multiple DSP stages in a musically coherent way
+rather than exposing every sub-parameter individually.
 
 | Param   | Range          | Default | What it controls |
 |---------|----------------|---------|------------------|
-| Speed   | −10 to +10 %   | 0 %     | Tape varispeed. Drives pitch + formant shift, plus the speed-coupled head bump and gap-loss corners. |
-| Natural | 0–100 %        | 60 %    | Pitch-shifter smoothness AND HF sparkle. Morphs varispeed grain length, grain jitter, and the HF exciter amount in lockstep. |
+| Speed   | −10 to +10 %   | 0 %     | Tape varispeed. Drives pitch + formant shift and the speed-coupled head bump centre. |
+| Natural | 0–100 %        | 60 %    | Pitch-shifter smoothness AND HF sparkle. Morphs varispeed grain length (40→80 ms), grain jitter, and multi-band exciter level. Sparkle is quadratic — blooms in the upper half. |
 | Drive   | 0–10 dB        | 3 dB    | Saturator input gain. |
-| Warm    | 0–100 %        | 20 %    | Tape mechanical character — head-bump gain, wow/flutter depth, scrape flutter, and (at high settings, quadratically scaled) hiss level. |
-| Tone    | 8–22 kHz       | 16 kHz  | Gap-loss filter corner. Effective corner is `Tone × (1 + Speed)`, clamped below Nyquist. |
+| Warm    | 0–100 %        | 25 %    | Tape mechanical character — head-bump gain (0–3.5 dB), wow/flutter depth (0–70%), and (at high settings, quadratically) hiss level. |
 | Mix     | 0–100 %        | 100 %   | Wet/dry blend of the saturation + EQ stage only — Speed/Warm/Sparkle always apply. |
 | Output  | −12 to +12 dB  | 0 dB    | Post trim. |
 
-Defaults are conservative. Push Speed +3 to +5 with Drive 3-4 dB for the classic
-80s pop sheen; bump Warm to taste for tape mechanical character.
+Push Speed +3 to +5 with Drive 3-4 dB for the classic 80s pop sheen. Crank
+Natural to 80–100 for the airy "sparkled" character; Warm 30–50 brings in
+wow/flutter and head-bump body.
 
 ## Latency
 
-About 50 ms (half the max grain length of 100 ms), reported to the host so
-Ableton's PDC compensates during playback. Live monitoring will feel slightly
-delayed.
+~40 ms (half the 80 ms max grain length), reported to the host so the DAW's
+PDC compensates during playback. Live monitoring will feel slightly delayed.
 
 ## Build (macOS)
 
@@ -69,14 +63,14 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-Built artifacts land in:
+Built artifacts:
 
 - `build/TapeSweet_artefacts/Release/AU/TapeSweet.component`
 - `build/TapeSweet_artefacts/Release/VST3/TapeSweet.vst3`
 - `build/TapeSweet_artefacts/Release/Standalone/TapeSweet.app`
 
-The build never copies into `~/Library/Audio/Plug-Ins/` automatically
-(`COPY_PLUGIN_AFTER_BUILD FALSE`). Install manually:
+`COPY_PLUGIN_AFTER_BUILD` is `FALSE` — the build never copies into
+`~/Library/Audio/Plug-Ins/` automatically. Install manually:
 
 ```sh
 cp -R build/TapeSweet_artefacts/Release/AU/TapeSweet.component ~/Library/Audio/Plug-Ins/Components/
@@ -88,11 +82,17 @@ Then rescan in your DAW.
 
 ## Status
 
-v0.5.0 — major DSP overhaul. Reduced from 9 knobs to 7 (Hiss + Wear merged into
-Warm; Sparkle absorbed into Natural). Algorithmic improvements:
+v0.6.0 — major refactor.
 
-- 8-tap windowed-sinc interpolation in the varispeed (was Hermite cubic)
-- WSOLA-aligned grain wraps to eliminate pop/glitch at boundaries
-- Sample-accurate wow/flutter (was block-averaged)
-- Tape saturator with memory feedback (was plain tanh)
-- HF "Air" exciter post-varispeed for the sparkle that sped-up tape produces
+- Reduced from 9 knobs (v0.4) to 6 (v0.6). Each knob now drives multiple
+  coordinated DSP stages.
+- Transient-aware varispeed: detects transients in the input and ducks the
+  read tap that would otherwise duplicate them, eliminating the percussion
+  echo that's the signature artefact of 2-tap pitch shifters.
+- Multi-band HF Sparkle exciter (presence + air bands) — much more audible
+  shimmer when Natural is in the upper half of its range.
+- Tape saturator with program-dependent compression, asymmetric soft-knee,
+  and memory feedback — closer to real tape "glue" than a generic waveshaper.
+- Tone parameter removed (the speed-coupled HF behaviour is now a fixed
+  internal 18 kHz rolloff; user-controlled gap-loss frequency was opaque).
+- ScrapeFlutter module removed — minor contribution, simpler code.

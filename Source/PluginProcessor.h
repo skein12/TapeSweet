@@ -6,11 +6,11 @@
 
 #include "Varispeed.h"
 #include "WowFlutter.h"
-#include "ScrapeFlutter.h"
 #include "TapeHiss.h"
 #include "NABEmphasis.h"
 #include "TapeSaturator.h"
 #include "Sparkle.h"
+#include "TransientDetector.h"
 
 class TapeSweetProcessor : public juce::AudioProcessor
 {
@@ -51,19 +51,20 @@ private:
 
     NABEmphasis preEmph, deEmph;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> headBump;
-    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> gapLoss;
+    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> fixedAir;     // gentle fixed HF rolloff (replaces Tone)
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hpf30;
     juce::dsp::Oversampling<float> oversampler
         { 2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
 
-    TapeSaturator saturator;
-    Varispeed     varispeed;
-    WowFlutter    wowFlutter;
-    Sparkle       sparkle;
-    ScrapeFlutter scrapeFlutter;
-    TapeHiss      tapeHiss;
+    TapeSaturator     saturator;
+    Varispeed         varispeed;
+    WowFlutter        wowFlutter;
+    Sparkle           sparkle;
+    TapeHiss          tapeHiss;
+    TransientDetector transientDetector;
 
     juce::AudioBuffer<float> modBuffer;
+    juce::AudioBuffer<float> transientBuffer;   // per-sample 0/1 (sample-accurate, channel 0)
 
     double currentSampleRate = 44100.0;
 

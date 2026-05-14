@@ -156,13 +156,12 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
 
     static const Spec specs[] =
     {
-        { "speed",   "Speed",   1, " %",   1.0    },
-        { "natural", "Natural", 0, " %",   1.0    },
-        { "drive",   "Drive",   1, " dB",  1.0    },
-        { "warm",    "Warm",    0, " %",   1.0    },
-        { "tone",    "Tone",    1, " kHz", 0.001  },
-        { "mix",     "Mix",     0, " %",   1.0    },
-        { "output",  "Output",  1, " dB",  1.0    },
+        { "speed",   "Speed",   1, " %",  1.0 },
+        { "natural", "Natural", 0, " %",  1.0 },
+        { "drive",   "Drive",   1, " dB", 1.0 },
+        { "warm",    "Warm",    0, " %",  1.0 },
+        { "mix",     "Mix",     0, " %",  1.0 },
+        { "output",  "Output",  1, " dB", 1.0 },
     };
 
     for (auto& spec : specs)
@@ -175,7 +174,7 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
         knobs.push_back (std::move (knob));
     }
 
-    setSize (770, 230);
+    setSize (680, 230);
 }
 
 TapeSweetEditor::~TapeSweetEditor()
