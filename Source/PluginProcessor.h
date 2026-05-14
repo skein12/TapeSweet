@@ -5,6 +5,10 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "Varispeed.h"
+#include "WowFlutter.h"
+#include "ScrapeFlutter.h"
+#include "TapeHiss.h"
+#include "NABEmphasis.h"
 
 class TapeSweetProcessor : public juce::AudioProcessor
 {
@@ -43,12 +47,17 @@ private:
     using Filter      = juce::dsp::IIR::Filter<float>;
     using FilterCoefs = juce::dsp::IIR::Coefficients<float>;
 
+    NABEmphasis preEmph, deEmph;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> headBump;
-    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hfRolloff;
+    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> gapLoss;
+    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hpf30;
     juce::dsp::Oversampling<float> oversampler
         { 2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
 
-    Varispeed varispeed;
+    Varispeed     varispeed;
+    WowFlutter    wowFlutter;
+    ScrapeFlutter scrapeFlutter;
+    TapeHiss      tapeHiss;
 
     double currentSampleRate = 44100.0;
 

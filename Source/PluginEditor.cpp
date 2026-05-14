@@ -91,7 +91,6 @@ void TapeSweetLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, in
     const float cy = (float) y + (float) h * 0.5f;
     const float strokeW = 1.6f;
 
-    // Background track arc
     juce::Path track;
     track.addCentredArc (cx, cy, radius, radius, 0.0f, startAng, endAng, true);
     g.setColour (Col::knobTrack);
@@ -99,7 +98,6 @@ void TapeSweetLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, in
                                                juce::PathStrokeType::curved,
                                                juce::PathStrokeType::rounded));
 
-    // Active arc up to current value
     const float currentAng = startAng + pos * (endAng - startAng);
     juce::Path active;
     active.addCentredArc (cx, cy, radius, radius, 0.0f, startAng, currentAng, true);
@@ -108,7 +106,6 @@ void TapeSweetLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, in
                                                 juce::PathStrokeType::curved,
                                                 juce::PathStrokeType::rounded));
 
-    // Indicator line — short tick from inner radius to the arc
     const float innerR = radius - 8.0f;
     const float outerR = radius - 2.0f;
     const float sinA = std::sin (currentAng);
@@ -155,16 +152,22 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
         int decimals;
         const char* suffix;
         double scale;
+        int row;
     };
 
+    // Row 0 = Tape Machine controls (transport-flavoured)
+    // Row 1 = Sound / Tone shaping
     static const Spec specs[] =
     {
-        { "speed",  "Speed",  1, " %",   1.0    },
-        { "drive",  "Drive",  1, " dB",  1.0    },
-        { "warmth", "Warmth", 1, " dB",  1.0    },
-        { "tone",   "Tone",   1, " kHz", 0.001  },
-        { "mix",    "Mix",    0, " %",   1.0    },
-        { "output", "Output", 1, " dB",  1.0    },
+        { "speed",   "Speed",   1, " %",   1.0,   0 },
+        { "natural", "Natural", 0, " %",   1.0,   0 },
+        { "wear",    "Wear",    0, " %",   1.0,   0 },
+        { "hiss",    "Hiss",    0, " %",   1.0,   0 },
+        { "drive",   "Drive",   1, " dB",  1.0,   1 },
+        { "warmth",  "Warmth",  1, " dB",  1.0,   1 },
+        { "tone",    "Tone",    1, " kHz", 0.001, 1 },
+        { "mix",     "Mix",     0, " %",   1.0,   1 },
+        { "output",  "Output",  1, " dB",  1.0,   1 },
     };
 
     for (auto& spec : specs)
@@ -174,10 +177,11 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
                                                    spec.decimals, spec.suffix,
                                                    spec.scale);
         addAndMakeVisible (knob.get());
+        rowOf.push_back (spec.row);
         knobs.push_back (std::move (knob));
     }
 
-    setSize (660, 230);
+    setSize (640, 360);
 }
 
 TapeSweetEditor::~TapeSweetEditor()
@@ -190,13 +194,11 @@ void TapeSweetEditor::paint (juce::Graphics& g)
     g.fillAll (Col::bg);
 
     auto titleBounds = getLocalBounds().removeFromTop (52).toFloat();
-
     auto titleFont = juce::Font (juce::FontOptions (13.0f)).withExtraKerningFactor (0.42f);
     g.setFont (titleFont);
     g.setColour (Col::ink);
     g.drawText ("TAPESWEET", titleBounds, juce::Justification::centred);
 
-    // Thin separator under the title
     g.setColour (Col::knobTrack);
     auto line = getLocalBounds().removeFromTop (53).removeFromBottom (1).reduced (32, 0);
     g.fillRect (line);
@@ -207,10 +209,29 @@ void TapeSweetEditor::resized()
     auto bounds = getLocalBounds();
     bounds.removeFromTop (60);
     bounds.removeFromBottom (12);
-    bounds.reduce (24, 0);
 
-    const int n = (int) knobs.size();
-    const int slot = bounds.getWidth() / n;
-    for (int i = 0; i < n; ++i)
-        knobs[(size_t) i]->setBounds (bounds.removeFromLeft (slot).reduced (6, 0));
+    const int knobWidth = 120;
+    const int rowHeight = bounds.getHeight() / 2;
+    const int totalWidth = getWidth();
+
+    auto layoutRow = [&] (int row, juce::Rectangle<int> area)
+    {
+        int count = 0;
+        for (size_t i = 0; i < knobs.size(); ++i)
+            if (rowOf[i] == row) ++count;
+
+        const int rowPixelWidth = knobWidth * count;
+        int x = (totalWidth - rowPixelWidth) / 2;
+        for (size_t i = 0; i < knobs.size(); ++i)
+        {
+            if (rowOf[i] != row) continue;
+            knobs[i]->setBounds (x, area.getY(), knobWidth, area.getHeight());
+            x += knobWidth;
+        }
+    };
+
+    auto rowTape  = bounds.removeFromTop (rowHeight);
+    auto rowSound = bounds;
+    layoutRow (0, rowTape);
+    layoutRow (1, rowSound);
 }
