@@ -158,8 +158,8 @@ TapeSweetEditor::TapeSweetEditor (TapeSweetProcessor& p)
     {
         { "speed",   "Speed",   1, " %",  1.0 },
         { "natural", "Natural", 0, " %",  1.0 },
-        { "drive",   "Drive",   1, " dB", 1.0 },
         { "warm",    "Warm",    0, " %",  1.0 },
+        { "wear",    "Wear",    0, " %",  1.0 },
         { "mix",     "Mix",     0, " %",  1.0 },
         { "output",  "Output",  1, " dB", 1.0 },
     };

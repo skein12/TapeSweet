@@ -9,8 +9,8 @@
 #include "TapeHiss.h"
 #include "NABEmphasis.h"
 #include "TapeSaturator.h"
-#include "Sparkle.h"
 #include "TransientDetector.h"
+#include "Glue.h"
 
 class TapeSweetProcessor : public juce::AudioProcessor
 {
@@ -52,32 +52,29 @@ private:
 
     NABEmphasis preEmph, deEmph;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> headBump;
-    juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> fixedAir;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hpf30;
     juce::dsp::Oversampling<float> oversampler
         { 2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
 
     TapeSaturator     saturator;
+    Glue              glue;
     Varispeed         varispeed;
     WowFlutter        wowFlutter;
-    Sparkle           sparkle;
     TapeHiss          tapeHiss;
     TransientDetector transientDetector;
 
-    DelayLine dryDelay        { 16384 };
-    DelayLine bypassDelay     { 16384 };
+    DelayLine dryDelay    { 16384 };
+    DelayLine bypassDelay { 16384 };
 
     juce::AudioBuffer<float> modBuffer;
     juce::AudioBuffer<float> transientBuffer;
     juce::AudioBuffer<float> delayedDryBuffer;
 
-    // Cached coefficient inputs - only rebuild filters when these change
     float lastHeadBumpHz = -1.0f;
     float lastHeadBumpDb = -1000.0f;
 
-    int   totalLatencySamples = 0;
-
-    double currentSampleRate = 44100.0;
+    int    totalLatencySamples = 0;
+    double currentSampleRate   = 44100.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TapeSweetProcessor)
 };
