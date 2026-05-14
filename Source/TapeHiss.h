@@ -15,7 +15,6 @@ class TapeHiss
 public:
     void prepare (double sampleRate)
     {
-        sr = sampleRate;
         envAttack  = (float) std::exp (-1.0 / (sampleRate * 0.020));  // 20 ms attack
         envRelease = (float) std::exp (-1.0 / (sampleRate * 0.150));  // 150 ms release
         reset();
@@ -86,7 +85,6 @@ private:
         return count;
     }
 
-    double sr = 44100.0;
     float envAttack = 0.0f, envRelease = 0.0f;
     float env = 0.0f;
     float amount = 0.0f;

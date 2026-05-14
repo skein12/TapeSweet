@@ -21,8 +21,6 @@ class TransientDetector
 public:
     void prepare (double sampleRate, int numChannels)
     {
-        sr = sampleRate;
-
         fastCoef = (float) std::exp (-1.0 / (sampleRate * 0.001));   // 1 ms
         slowCoef = (float) std::exp (-1.0 / (sampleRate * 0.080));   // 80 ms
         refractoryLen = (int) (sampleRate * 0.020);                  // 20 ms hold
@@ -58,7 +56,6 @@ public:
     }
 
 private:
-    double sr = 44100.0;
     float fastCoef = 0.0f, slowCoef = 0.0f;
     int refractoryLen = 0;
     std::vector<float> fast, slow;

@@ -7,20 +7,22 @@
 #include <limits>
 
 /*
-    Tape-flavoured pitch shifter, v0.6.
+    Tape-flavoured pitch shifter.
 
-    Improvements over v0.5:
-      - Transient-aware tap ducking. When the caller signals a transient,
-        we predict which tap will replay the transient (the one with longer
-        remaining grain travel) and duck its window weight briefly at that
-        future sample. The transient plays through the OTHER tap and isn't
-        duplicated. Eliminates the percussion-doubling artefact that's the
-        signature failure mode of 2-tap shifters.
-      - Wider WSOLA search (±5 ms baseline, ±10 ms post-transient) for
-        better wrap alignment on dynamic content.
-      - Cleaner internal state, no unused parameters.
+    Two read taps half a grain apart, Hann-windowed, with:
+      - 8-tap windowed-sinc interpolation (precomputed table)
+      - WSOLA wrap alignment: each tap's wrap position is chosen by a
+        ±5 ms cross-correlation search (±10 ms when a recent transient was
+        flagged) against the other tap's current read window
+      - Transient-aware tap ducking: when the caller signals a transient,
+        we predict which tap will replay it later and duck that tap's
+        window briefly so percussion doesn't get duplicated
+      - Per-sample wow/flutter pitch modulation (optional, in cents)
+      - Random grain-length jitter (scaled by Natural)
+      - Anti-phase tap-distance modulation (Dimension D trick)
 
-    Latency: maxGrain / 2 (~40 ms at 80 ms grain @ 44.1 kHz).
+    Latency: maxGrain / 2 (about 40 ms at 80 ms grain, 44.1 kHz). Constant
+    across all parameter values so DAW PDC works.
 */
 class Varispeed
 {
@@ -197,9 +199,6 @@ private:
         const float d = (float) std::abs (delta) / (float) muteHalfSamples;
         return d * d * (3.0f - 2.0f * d); // smoothstep
     }
-
-    int& tap1MuteRef() noexcept { return tap1MuteAt; }
-    int& tap2MuteRef() noexcept { return tap2MuteAt; }
 
     // ============================================================================
     // 8-tap windowed-sinc interpolation table

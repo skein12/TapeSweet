@@ -29,7 +29,6 @@ class TapeSaturator
 public:
     void prepare (double oversampledSampleRate, int numChannels)
     {
-        sr = oversampledSampleRate;
         envAttack  = (float) std::exp (-1.0 / (oversampledSampleRate * 0.050));
         envRelease = (float) std::exp (-1.0 / (oversampledSampleRate * 0.200));
         memory.assign ((size_t) numChannels, 0.0f);
@@ -74,7 +73,6 @@ public:
     }
 
 private:
-    double sr = 44100.0;
     float envAttack = 0.0f, envRelease = 0.0f;
     std::vector<float> memory, env;
 };

@@ -19,11 +19,9 @@ class WowFlutter
 public:
     void prepare (double sampleRate)
     {
-        sr = sampleRate;
-        wowPhaseInc     = (float) (0.45 / sampleRate);   // 0.45 Hz capstan
-        wowDriftCoef    = (float) std::exp (-juce::MathConstants<double>::twoPi * 3.0 / sampleRate); // ~3 Hz LP
-        flutterCoef     = (float) std::exp (-juce::MathConstants<double>::twoPi * 9.0 / sampleRate); // centre ~9 Hz
-
+        wowPhaseInc  = (float) (0.45 / sampleRate);   // 0.45 Hz capstan
+        wowDriftCoef = (float) std::exp (-juce::MathConstants<double>::twoPi * 3.0 / sampleRate); // ~3 Hz LP
+        flutterCoef  = (float) std::exp (-juce::MathConstants<double>::twoPi * 9.0 / sampleRate); // centre ~9 Hz
         reset();
     }
 
@@ -65,7 +63,6 @@ public:
     }
 
 private:
-    double sr = 44100.0;
     float wowPhase = 0.0f, wowPhaseInc = 0.0f;
     float wowDrift = 0.0f, wowDriftCoef = 0.0f;
     float flutter = 0.0f, flutterCoef = 0.0f;

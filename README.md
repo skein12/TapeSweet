@@ -89,6 +89,17 @@ Then rescan in your DAW.
 
 ## Status
 
+v0.9.0 - UI redesign and code cleanup pass.
+
+- Two-tier knob layout: Speed and Natural as the featured large rotaries
+  (the expressive featured controls), Warm and Wear as smaller rotaries
+  below.
+- Mix is now a horizontal slider across the bottom of the window. Output
+  is a vertical fader on the right (mixing-console style).
+- Dead code removed: unused tap-mute accessors in Varispeed, unused `sr`
+  members across modules, stale history comments referencing earlier
+  versions.
+
 v0.8.0 - magic-knob refactor.
 
 - 6 knobs (was 7). Drive folded into Warm. Sparkle module removed.

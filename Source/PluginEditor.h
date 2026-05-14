@@ -12,8 +12,12 @@ public:
                            float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
                            juce::Slider&) override;
 
+    void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
+                           float sliderPos, float minSliderPos, float maxSliderPos,
+                           const juce::Slider::SliderStyle, juce::Slider&) override;
+
     juce::Label* createSliderTextBox (juce::Slider&) override;
-    juce::Font getLabelFont (juce::Label&) override;
+    juce::Font   getLabelFont (juce::Label&) override;
 };
 
 class TapeSweetEditor : public juce::AudioProcessorEditor
@@ -26,11 +30,12 @@ public:
     void resized() override;
 
 private:
-    struct KnobControl;
+    struct Control;
 
-    TapeSweetProcessor& proc;
+    TapeSweetProcessor&  proc;
     TapeSweetLookAndFeel laf;
-    std::vector<std::unique_ptr<KnobControl>> knobs;
+
+    std::unique_ptr<Control> speedC, naturalC, warmC, wearC, mixC, outputC;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TapeSweetEditor)
 };

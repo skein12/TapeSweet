@@ -25,7 +25,6 @@ class Glue
 public:
     void prepare (double sampleRate, int numChannels)
     {
-        sr = sampleRate;
         attackCoef  = (float) std::exp (-1.0 / (sampleRate * 0.025));
         releaseCoef = (float) std::exp (-1.0 / (sampleRate * 0.220));
         env.assign ((size_t) numChannels, 0.0f);
@@ -85,7 +84,6 @@ public:
     }
 
 private:
-    double sr = 44100.0;
     float attackCoef = 0.0f, releaseCoef = 0.0f;
     float blend = 0.0f;
     std::vector<float> env;
