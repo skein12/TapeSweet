@@ -19,7 +19,7 @@ public:
     {
         spec = { sampleRate, 512, (juce::uint32) numChannels };
         filter.prepare (spec);
-        emphasisDb = (mode == Pre) ? +6.0f : -6.0f;
+        emphasisDb = (mode == Pre) ? +3.0f : -3.0f;
         updateCoefficients (sampleRate);
     }
 

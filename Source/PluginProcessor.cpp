@@ -21,7 +21,7 @@ TapeSweetProcessor::createParameterLayout()
     params.push_back (std::make_unique<P>("drive",   "Drive",   R(0.0f,   10.0f,  0.01f),   3.0f, "dB"));
     params.push_back (std::make_unique<P>("warmth",  "Warmth",  R(0.0f,    3.0f,  0.01f),   1.5f, "dB"));
     params.push_back (std::make_unique<P>("tone",    "Tone",    R(8000.0f, 22000.0f, 1.0f), 16000.0f, "Hz"));
-    params.push_back (std::make_unique<P>("wear",    "Wear",    R(0.0f,  100.0f,  0.1f),   25.0f,  "%"));
+    params.push_back (std::make_unique<P>("wear",    "Wear",    R(0.0f,  100.0f,  0.1f),   15.0f,  "%"));
     params.push_back (std::make_unique<P>("mix",     "Mix",     R(0.0f,  100.0f,  0.1f),  100.0f,  "%"));
     params.push_back (std::make_unique<P>("hiss",    "Hiss",    R(0.0f,  100.0f,  0.1f),    0.0f,  "%"));
     params.push_back (std::make_unique<P>("output",  "Output",  R(-12.0f, 12.0f,  0.01f),   0.0f, "dB"));
@@ -88,18 +88,20 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const float makeup    = juce::Decibels::decibelsToGain (-drive * 0.5f);
     const float speedRatio = 1.0f + speedPct * 0.01f;
 
-    // Speed-coupled head bump: centre frequency shifts with tape speed.
-    // Real machines have the head-bump peak track playback speed linearly.
+    // Speed-coupled head bump — broad peak that tracks Speed
     *headBump.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter (
         currentSampleRate,
         juce::jlimit (40.0f, 200.0f, 80.0f * speedRatio),
-        1.5f,
+        0.7f,
         juce::Decibels::decibelsToGain (warmth));
 
-    // Speed-coupled gap-loss: HF rolloff corner also tracks speed (faster
-    // tape = brighter, the "shine" of varispeed)
+    // Speed-coupled gap-loss — corner tracks Speed and is clamped well below
+    // Nyquist so the IIR stays stable (over-Nyquist makes the filter explode
+    // into NaN which sounds like a 90 dB burst — exactly what v0.4.0 did).
+    const float maxCorner = (float) currentSampleRate * 0.45f;
+    const float gapCorner = juce::jlimit (2000.0f, maxCorner, toneHz * speedRatio);
     *gapLoss.state = *juce::dsp::IIR::Coefficients<float>::makeFirstOrderLowPass (
-        currentSampleRate, juce::jlimit (4000.0f, 30000.0f, toneHz * speedRatio));
+        currentSampleRate, gapCorner);
 
     // Stash dry copy for Mix (pre-saturation, post-input)
     juce::AudioBuffer<float> dry;
@@ -150,11 +152,10 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ===== Varispeed with sample-rate wow/flutter modulation =====
-    // Wear governs both the wow/flutter depth and the scrape/hiss-mod intensity.
-    // Natural adds a small baseline wow even when Wear is zero, since the
-    // research found that a tiny pitch wobble is what makes the ear stop
-    // hearing grain-rate modulation as "digital".
-    const float wowAmt     = juce::jmin (1.0f, wear + natural * 0.25f);
+    // Wear governs wow/flutter depth + scrape level. Natural adds a tiny
+    // baseline wow (0.05 max) that masks residual grain artefacts without
+    // making the plugin feel "wobbly" when Wear is at zero.
+    const float wowAmt     = juce::jmin (1.0f, wear + natural * 0.05f);
     const float flutterAmt = wear;
     wowFlutter.setAmounts (wowAmt, flutterAmt);
 
@@ -186,6 +187,18 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         juce::dsp::ProcessContextReplacing<float> ctx (block);
         hpf30.process (ctx);
         block.multiplyBy (outGain);
+    }
+
+    // ===== Safety: scrub any NaN/Inf and clamp catastrophic peaks. If a
+    // filter goes unstable mid-block we'd otherwise blast the user's monitors.
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        auto* d = buffer.getWritePointer (ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            if (! std::isfinite (d[i])) d[i] = 0.0f;
+            else d[i] = juce::jlimit (-4.0f, 4.0f, d[i]);
+        }
     }
 }
 
