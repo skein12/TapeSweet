@@ -5,13 +5,13 @@
 #include <cmath>
 
 /*
-    Tape saturator with three coordinated nonlinear stages — together they
+    Tape saturator with three coordinated nonlinear stages - together they
     deliver the "glue + warmth + asymmetric harmonics" character that
     separates real tape from a generic waveshaper:
 
       1. Program-dependent input gain: a slow envelope follower (50 ms
          attack / 200 ms release) gently rolls input gain back when the
-         signal is hot — emulating the natural compression a tape head
+         signal is hot - emulating the natural compression a tape head
          applies as the medium approaches magnetic saturation.
 
       2. Asymmetric soft-knee curve: x · (1 / (1 + |k·x|))^(1/k) with a

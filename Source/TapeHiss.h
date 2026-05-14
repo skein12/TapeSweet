@@ -4,7 +4,7 @@
 #include <cmath>
 
 /*
-    Tape hiss — pink-tinted noise generated post-effect, level-modulated by the
+    Tape hiss - pink-tinted noise generated post-effect, level-modulated by the
     program envelope so it "breathes" with the signal. Auto-mutes below the
     silence threshold so quiet passages stay quiet.
 

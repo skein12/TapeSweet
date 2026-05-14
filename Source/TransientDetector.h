@@ -12,7 +12,7 @@
     transient. A short refractory period prevents re-triggering on the
     decay of the same event.
 
-    Output is a per-sample 0/1 flag — consumers can use it to force grain
+    Output is a per-sample 0/1 flag - consumers can use it to force grain
     realignment, gate envelopes, or anything else that benefits from
     transient awareness.
 */

@@ -117,7 +117,7 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const float speedRatio = 1.0f + speedPct * 0.01f;
 
     // ============================================================================
-    // Cache head-bump coefficients — only rebuild if input parameters changed.
+    // Cache head-bump coefficients - only rebuild if input parameters changed.
     // Avoids per-block allocation in the makePeakFilter() path.
     // ============================================================================
     const float bumpHz = juce::jlimit (40.0f, 200.0f, 80.0f * speedRatio);
@@ -190,7 +190,7 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // Varispeed — bypassed via constant-latency delay when no pitch shift
+    // Varispeed - bypassed via constant-latency delay when no pitch shift
     // and no wow/flutter is active. Keeps total plugin latency constant so
     // PDC stays correct, while making Speed=0 + Warm=0 truly transparent
     // (no two-tap comb filtering coloration).

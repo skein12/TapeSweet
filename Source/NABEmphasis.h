@@ -7,7 +7,7 @@
     stage. The pre-emphasis HF shelf is identical to the playback de-emphasis
     inverse, so a "clean" signal (no saturation in between) is restored to
     flat. With saturation in the middle, the HF content sees more drive than
-    the LF content — which is the canonical reason real tape "softens
+    the LF content - which is the canonical reason real tape "softens
     transients" and adds upper-mid colour.
 */
 class NABEmphasis

@@ -163,7 +163,7 @@ public:
 
 private:
     // ============================================================================
-    // Transient muting — schedule a future duck on whichever tap will replay the
+    // Transient muting - schedule a future duck on whichever tap will replay the
     // just-detected transient. The "later" tap is the one with longer remaining
     // travel until it reaches the current write position.
     //   T_tap = currentGrain * (1 - ph) / ratio    (samples until that tap reads
@@ -261,7 +261,7 @@ private:
     // ============================================================================
     // WSOLA: search a window around (writeIdx - N) for the position whose audio
     // best matches what the other tap is currently reading. Wider search when a
-    // transient happened recently — gives the wrap more flexibility on dynamic
+    // transient happened recently - gives the wrap more flexibility on dynamic
     // material.
     // ============================================================================
     int computeWsolaOffset() const noexcept

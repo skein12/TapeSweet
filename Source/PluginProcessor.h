@@ -71,7 +71,7 @@ private:
     juce::AudioBuffer<float> transientBuffer;
     juce::AudioBuffer<float> delayedDryBuffer;
 
-    // Cached coefficient inputs — only rebuild filters when these change
+    // Cached coefficient inputs - only rebuild filters when these change
     float lastHeadBumpHz = -1.0f;
     float lastHeadBumpDb = -1000.0f;
 

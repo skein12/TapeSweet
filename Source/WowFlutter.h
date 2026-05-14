@@ -9,7 +9,7 @@
     Returns a per-sample pitch modulation value in cents that emulates a real
     tape transport's mechanical pitch instability. Real Studer A800-class
     machines spec ~0.03-0.04 % WRMS at 30 ips, so depth is small even at the
-    "worn" extreme — typically ±5 cents wow, ±2 cents flutter.
+    "worn" extreme - typically ±5 cents wow, ±2 cents flutter.
 
     Wow:    0.4 Hz capstan-rate sine + noise-shaped brown drift (LPF ~3 Hz)
     Flutter: 6-12 Hz band-passed white noise

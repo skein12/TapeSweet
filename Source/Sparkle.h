@@ -8,13 +8,13 @@
     Multi-band HF excitation. Two bands, each with its own excitation
     character:
 
-      Presence (2.5 – 7 kHz): isolated via 1-pole BPF, lightly soft-clipped
+      Presence (2.5 - 7 kHz): isolated via 1-pole BPF, lightly soft-clipped
         (tanh) to add a warm tube-style midrange character that helps
         upper-mid formants stand out without sibilance.
 
       Air (8+ kHz): isolated via 1-pole HPF, asymmetric half-wave rectified
         (|x|) with DC creep removed by envelope subtraction. Generates
-        even-harmonic content that lives well above the source spectrum —
+        even-harmonic content that lives well above the source spectrum -
         the "shine" of sped-up tape.
 
     Both bands are mixed back into the dry signal at controlled levels.
