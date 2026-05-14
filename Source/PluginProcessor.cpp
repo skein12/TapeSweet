@@ -30,8 +30,8 @@ void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     currentSampleRate = sampleRate;
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 2 };
 
-    preEmph.prepare  (sampleRate, 2, NABEmphasis::Pre);
-    deEmph.prepare   (sampleRate, 2, NABEmphasis::De);
+    preEmph.prepare  (sampleRate, 2);
+    deEmph.prepare   (sampleRate, 2);
     headBump.prepare (spec);
     hpf30.prepare    (spec);
 
@@ -62,6 +62,7 @@ void TapeSweetProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     modBuffer.setSize        (1, samplesPerBlock, false, false, true);
     transientBuffer.setSize  (1, samplesPerBlock, false, false, true);
     delayedDryBuffer.setSize (2, samplesPerBlock, false, false, true);
+    satBlendBuffer.setSize   (2, samplesPerBlock, false, false, true);
 
     *hpf30.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass (
         sampleRate, 30.0f, 0.707f);
@@ -99,14 +100,17 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // Macro mappings - each knob drives multiple internal stages in a coherent way
     // ============================================================================
 
-    // Warm: saturation density macro.
-    //   - drives the saturator (up to +8 dB)
-    //   - lifts the head bump (0..3 dB)
-    //   - adds a hidden parallel glue compressor blend (0..18 %)
-    //   - partial auto-makeup keeps perceived loudness roughly stable
-    const float warmDriveDb = warm * 8.0f;
-    const float warmthDb    = warm * 3.0f;
-    const float glueBlend   = warm * 0.18f;
+    // Warm: saturation density macro. At higher Warm values the saturator is
+    // driven harder AND fed a 3 kHz-boosted version of the signal, so it
+    // generates harmonics in the upper-mid band that imprint a "tape-mid"
+    // character. The heavily saturated leg is then parallel-blended with the
+    // pre-saturation signal so the user gets the harmonic colour without the
+    // full-band amplitude crush.
+    const float warmDriveDb   = warm * 10.0f;        // up to +10 dB into the saturator
+    const float bandEmphasisDb = warm * 6.0f;        // up to +6 dB mid emphasis pre-sat
+    const float satMix        = warm * 0.55f;        // up to 55 % parallel blend
+    const float warmthDb      = warm * 3.0f;
+    const float glueBlend     = warm * 0.15f;
 
     // Wear: imperfection macro. wow + flutter + hiss only. Hiss is quadratic
     // so the bottom half of the knob stays clean.
@@ -158,10 +162,19 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // ============================================================================
-    // WET PATH (all Warm-driven):
-    //   NAB pre-emph -> drive -> tape sat (oversampled) -> NAB de-emph
-    //   -> head bump -> parallel glue
+    // WET PATH:
+    //   Snapshot pre-sat signal for parallel blending. Then run the heavy sat
+    //   path (band pre-emph -> drive -> oversampled saturator -> band de-emph)
+    //   and blend it back at satMix. After that, head bump + parallel glue.
     // ============================================================================
+
+    // Snapshot for parallel sat blend
+    for (int c = 0; c < numCh; ++c)
+        satBlendBuffer.copyFrom (c, 0, buffer, c, 0, numSamples);
+
+    preEmph.setGainDb (bandEmphasisDb);
+    deEmph.setGainDb (-bandEmphasisDb);
+
     preEmph.process (buffer);
 
     {
@@ -182,6 +195,19 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     deEmph.process (buffer);
+
+    // Parallel sat blend: buffer = (1 - satMix) * pre-sat + satMix * post-sat
+    if (satMix < 0.999f)
+    {
+        const float oneMinusMix = 1.0f - satMix;
+        for (int c = 0; c < numCh; ++c)
+        {
+            auto* w = buffer.getWritePointer (c);
+            auto* dry = satBlendBuffer.getReadPointer (c);
+            for (int s = 0; s < numSamples; ++s)
+                w[s] = w[s] * satMix + dry[s] * oneMinusMix;
+        }
+    }
 
     {
         juce::dsp::AudioBlock<float> block (buffer);

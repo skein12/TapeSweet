@@ -27,8 +27,8 @@ few knobs, get a finished-feeling 80s-ish sweetened sound."
 |---------|----------------|---------|------------------------------------------|
 | Speed   | -10 to +10 %   | 0 %     | At 0 % the varispeed engine is bypassed with a constant-latency delay. |
 | Natural | 0-100 %        | 60 %    | Varispeed grain length (40-80 ms), grain jitter, WSOLA search width. |
-| Warm    | 0-100 %        | 25 %    | Saturator drive (0-8 dB), head-bump gain (0-3 dB), parallel glue blend (0-18 %). Auto-makeup keeps perceived loudness stable. |
-| Wear    | 0-100 %        | 0 %     | Wow + flutter depth; hiss level enters quadratically so the bottom half is clean. |
+| Warm    | 0-100 %        | 25 %    | Mid-focused tape colour. Drives the saturator (0-10 dB), pre-boosts a 3 kHz peak going into it (0-6 dB) and matched-cuts after, blends the heavily saturated leg back in parallel (0-55 %), lifts the head bump (0-3 dB), and adds a hidden parallel glue compressor (0-15 %). Auto-makeup. |
+| Wear    | 0-100 %        | 0 %     | Tape transport imperfection. Wow (slow ~0.45 Hz capstan-rate pitch drift) + flutter (~9 Hz mechanical jitter) scale linearly. Hiss (pink-tinted noise floor that breathes with the program; auto-mutes during silence) scales quadratically so the bottom half of the knob stays clean. At Wear = 0 the plugin is stable and silent; at 100 % it sounds like a worn machine. |
 | Mix     | 0-100 %        | 100 %   | Wet vs latency-matched dry. Mix = 0 % is a literal bypass of the entire plugin chain. |
 | Output  | -12 to +12 dB  | 0 dB    |                                          |
 
@@ -88,6 +88,19 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/TapeSweet.com
 Then rescan in your DAW.
 
 ## Status
+
+v0.10.0 - mid-focused saturation overhaul.
+
+- Replaced wide-band NAB pre/de-emphasis (HF shelf at 3.2 kHz) with a
+  3 kHz peak filter rolling off naturally by ~5 kHz on either side, Q 1.4.
+  Saturator now sees a mid-boosted signal, so harmonics generate primarily
+  in the upper-mid band - the "tape-mid" character.
+- Internal parallel sat blend (0-55 %, driven by Warm). The heavily
+  saturated leg is blended back with the pre-sat signal so high Warm
+  values give obvious harmonic character without amplitude crush.
+- Reduced varispeed grain-length jitter (3 ms -> 2 ms) and widened the
+  WSOLA correlation window (2 ms -> 4 ms) to reduce stutter/pop artefacts
+  on pitch-shifted dynamic content.
 
 v0.9.0 - UI redesign and code cleanup pass.
 

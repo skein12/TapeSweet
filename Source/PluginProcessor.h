@@ -7,7 +7,7 @@
 #include "Varispeed.h"
 #include "WowFlutter.h"
 #include "TapeHiss.h"
-#include "NABEmphasis.h"
+#include "BandEmphasis.h"
 #include "TapeSaturator.h"
 #include "TransientDetector.h"
 #include "Glue.h"
@@ -50,7 +50,7 @@ private:
     using FilterCoefs = juce::dsp::IIR::Coefficients<float>;
     using DelayLine   = juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None>;
 
-    NABEmphasis preEmph, deEmph;
+    BandEmphasis preEmph, deEmph;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> headBump;
     juce::dsp::ProcessorDuplicator<Filter, FilterCoefs> hpf30;
     juce::dsp::Oversampling<float> oversampler
@@ -69,6 +69,7 @@ private:
     juce::AudioBuffer<float> modBuffer;
     juce::AudioBuffer<float> transientBuffer;
     juce::AudioBuffer<float> delayedDryBuffer;
+    juce::AudioBuffer<float> satBlendBuffer;
 
     float lastHeadBumpHz = -1.0f;
     float lastHeadBumpDb = -1000.0f;

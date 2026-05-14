@@ -75,7 +75,7 @@ public:
         const int numCh      = juce::jmin ((int) buffers.size(), buffer.getNumChannels());
 
         const float targetGrain      = juce::jmap (natural, (float) minGrain, (float) maxGrain);
-        const float jitterMaxSamples = natural * (float) sr * 0.003f;
+        const float jitterMaxSamples = natural * (float) sr * 0.002f;
 
         constexpr float grainSmooth = 0.0002f;
         const float twoPi = juce::MathConstants<float>::twoPi;
@@ -268,7 +268,7 @@ private:
         const int N = (int) currentGrain;
         const bool nearTransient = samplesSinceTransient < N;
         const int searchHalf = (int) (sr * (nearTransient ? 0.010 : 0.005));
-        const int corrWindow = (int) (sr * 0.002);
+        const int corrWindow = (int) (sr * 0.004);
 
         const auto& b = buffers[0];
         const int otherTapAnchor = writeIdx - N / 2;
