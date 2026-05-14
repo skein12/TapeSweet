@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 
 TapeSweetProcessor::TapeSweetProcessor()
     : AudioProcessor (BusesProperties()
@@ -120,7 +121,7 @@ void TapeSweetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
 juce::AudioProcessorEditor* TapeSweetProcessor::createEditor()
 {
-    return new juce::GenericAudioProcessorEditor (*this);
+    return new TapeSweetEditor (*this);
 }
 
 void TapeSweetProcessor::getStateInformation (juce::MemoryBlock& destData)
