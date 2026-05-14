@@ -1,8 +1,10 @@
 # TapeSweet
 
-An AU/VST3 plugin that emulates pushing 80s analog multitrack tape a few percent
-hotter and a few percent faster the trick behind records like *Into the Groove*
-and other 80s hits where the multitrack was played back slightly fast for sheen.
+A tape-inspired sweetener: saturation, NAB-style emphasis/de-emphasis EQ,
+head bump, varispeed pitch shift, wow/flutter, HF sparkle, and hiss. Aimed at
+the territory of 80s pop records like *Into the Groove* where the multitrack
+was played back slightly fast for sheen — not a physically convincing tape
+model, just the broad-strokes character of that production trick.
 
 Built with JUCE 8.
 
@@ -36,11 +38,11 @@ rather than exposing every sub-parameter individually.
 
 | Param   | Range          | Default | What it controls |
 |---------|----------------|---------|------------------|
-| Speed   | −10 to +10 %   | 0 %     | Tape varispeed. Drives pitch + formant shift and the speed-coupled head bump centre. |
+| Speed   | −10 to +10 %   | 0 %     | Tape varispeed (whole-signal pitch shift; spectral content moves up/down with it). Also drives the speed-coupled head-bump centre. |
 | Natural | 0–100 %        | 60 %    | Pitch-shifter smoothness AND HF sparkle. Morphs varispeed grain length (40→80 ms), grain jitter, and multi-band exciter level. Sparkle is quadratic — blooms in the upper half. |
 | Drive   | 0–10 dB        | 3 dB    | Saturator input gain. |
 | Warm    | 0–100 %        | 25 %    | Tape mechanical character — head-bump gain (0–3.5 dB), wow/flutter depth (0–70%), and (at high settings, quadratically) hiss level. |
-| Mix     | 0–100 %        | 100 %   | Wet/dry blend of the saturation + EQ stage only — Speed/Warm/Sparkle always apply. |
+| Mix     | 0–100 %        | 100 %   | True wet/dry blend. Mix = 0 % outputs the latency-matched dry input (effective bypass); Mix = 100 % outputs the fully processed signal. |
 | Output  | −12 to +12 dB  | 0 dB    | Post trim. |
 
 Push Speed +3 to +5 with Drive 3-4 dB for the classic 80s pop sheen. Crank
