@@ -74,7 +74,11 @@ Install paths:
   `~/Library/Audio/Plug-Ins/VST3/` (VST3). After copying, clear quarantine
   with the `xattr -dr com.apple.quarantine ...` command from the Build
   section below.
-- **Windows:** copy `TapeSweet.vst3` to `C:\Program Files\Common Files\VST3\`.
+- **Windows:** copy the whole `TapeSweet.vst3` folder (it's a bundle, not a
+  single file) into `C:\Program Files\Common Files\VST3\`. The DLL,
+  `moduleinfo.json`, and `Resources/` stay inside it. Then rescan in your
+  DAW. The standalone `TapeSweet.exe` is self-contained — put it anywhere
+  and double-click to run.
 
 ### Expected warnings on first launch
 
