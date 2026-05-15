@@ -60,6 +60,32 @@ Input
 settings. About 40 ms + a handful of samples at 44.1 kHz. Reported to the host
 so DAW PDC compensates during playback.
 
+## Download
+
+Prebuilt binaries for macOS (universal) and Windows (x64) are attached to each
+[release](https://github.com/skein12/TapeSweet/releases/latest):
+
+- `TapeSweet-macos.zip` — AU, VST3, and standalone `.app`.
+- `TapeSweet-windows.zip` — VST3 and standalone `.exe`.
+
+Install paths:
+
+- **macOS:** `~/Library/Audio/Plug-Ins/Components/` (AU),
+  `~/Library/Audio/Plug-Ins/VST3/` (VST3). After copying, clear quarantine
+  with the `xattr -dr com.apple.quarantine ...` command from the Build
+  section below.
+- **Windows:** copy `TapeSweet.vst3` to `C:\Program Files\Common Files\VST3\`.
+
+### Expected warnings on first launch
+
+The binaries are unsigned, so each OS will warn the first time you load them:
+
+- **macOS Gatekeeper** — "TapeSweet can't be opened because the developer
+  cannot be verified." The `xattr -dr com.apple.quarantine` step (Build
+  section) removes the quarantine flag and prevents this.
+- **Windows SmartScreen** — only fires on the standalone `TapeSweet.exe`,
+  not on the VST3 loaded by your DAW. Click "More info" → "Run anyway".
+
 ## Build (macOS)
 
 Requires CMake >= 3.22 and Xcode Command Line Tools.
