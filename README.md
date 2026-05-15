@@ -115,6 +115,14 @@ Then rescan in your DAW.
 
 ## Status
 
+v0.12.0 - Prebuilt macOS + Windows downloads.
+
+- GitHub Actions workflow builds universal-binary macOS (AU/VST3/Standalone)
+  and Windows x64 (VST3/Standalone) on each tagged release and attaches the
+  zips to the GitHub release.
+- README "Download" section + unsigned-build warning notes (Gatekeeper,
+  SmartScreen).
+
 v0.11.0 - Color rename + Ableton-Overdrive-style parallel sat balance.
 
 - Wear knob renamed to "Color" (param ID kept as "wear" so existing host
